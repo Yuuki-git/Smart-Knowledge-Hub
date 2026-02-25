@@ -11,6 +11,7 @@ import com.smartknowledgehub.model.MetadataKeys;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.tika.Tika;
+import org.apache.tika.exception.TikaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -27,12 +28,15 @@ import java.util.UUID;
 @Service
 public class DocumentChunkingService {
     private static final Logger log = LoggerFactory.getLogger(DocumentChunkingService.class);
+    // 每个 chunk 的最大字符数
     private static final int MAX_CHARS = 1200;
+    // 段落重叠数量，避免上下文断裂
     private static final int OVERLAP_PARAGRAPHS = 1;
 
     private final Tika tika = new Tika();
 
-    public List<ChunkPayload> chunk(Path path, String documentId, String originalName) throws IOException {
+    // Tika 解析可能抛出 TikaException，统一上抛由调用方处理
+    public List<ChunkPayload> chunk(Path path, String documentId, String originalName) throws IOException, TikaException {
         String fileName = originalName != null ? originalName : path.getFileName().toString();
         String extension = extensionOf(fileName);
         return switch (extension) {
@@ -44,6 +48,7 @@ public class DocumentChunkingService {
     }
 
     private List<ChunkPayload> chunkPdf(Path path, String documentId, String fileName) throws IOException {
+        // PDF 按页切片，保留页码用于引用
         List<ChunkPayload> chunks = new ArrayList<>();
         try (PDDocument document = PDDocument.load(path.toFile())) {
             PDFTextStripper stripper = new PDFTextStripper();
@@ -65,6 +70,7 @@ public class DocumentChunkingService {
     }
 
     private List<ChunkPayload> chunkMarkdown(String text, String documentId, String fileName) {
+        // Markdown 按标题分段
         List<ChunkPayload> chunks = new ArrayList<>();
         List<String> sections = splitMarkdownSections(text);
         int index = 0;
@@ -78,6 +84,7 @@ public class DocumentChunkingService {
     }
 
     private List<ChunkPayload> chunkJava(String code, String documentId, String fileName) {
+        // Java 代码按类/方法结构切片
         List<ChunkPayload> chunks = new ArrayList<>();
         try {
             CompilationUnit unit = StaticJavaParser.parse(code);
@@ -102,6 +109,7 @@ public class DocumentChunkingService {
                 }
             }
         } catch (Exception ex) {
+            // 解析失败时退化为纯文本切片
             log.warn("Java parse failed, fallback to plain text. file={}", fileName, ex);
             return chunkPlainText(code, documentId, fileName);
         }
@@ -117,6 +125,7 @@ public class DocumentChunkingService {
     }
 
     private List<ChunkPayload> buildChunks(String text, String documentId, ChunkSource source, int startIndex) {
+        // 将文本拆为段落窗口，按长度聚合为 chunk
         List<String> paragraphs = splitParagraphs(text);
         List<ChunkPayload> chunks = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -200,7 +209,8 @@ public class DocumentChunkingService {
         return payload;
     }
 
-    private String extractWithTika(Path path) throws IOException {
+    // 交给上层统一处理异常，避免在底层堆叠 try-catch
+    private String extractWithTika(Path path) throws IOException, TikaException {
         return tika.parseToString(path.toFile());
     }
 

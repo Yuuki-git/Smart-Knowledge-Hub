@@ -4,10 +4,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app.search")
 public class OpenSearchProperties {
+    // 是否启用 OpenSearch 关键词检索
     private boolean enabled = false;
     private String baseUrl = "http://localhost:9200";
     private String indexName = "chunks";
+    // 是否自动创建索引
     private boolean autoCreate = true;
+    // 分词器配置
     private String analyzer = "standard";
     private String searchAnalyzer = "standard";
     private String username;

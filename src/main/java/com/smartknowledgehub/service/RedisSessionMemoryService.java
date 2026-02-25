@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 @Service
 public class RedisSessionMemoryService implements SessionMemoryService {
     private static final Logger log = LoggerFactory.getLogger(RedisSessionMemoryService.class);
+    // 会话消息在 Redis 中保留 12 小时
     private static final Duration TTL = Duration.ofHours(12);
 
     private final StringRedisTemplate redisTemplate;
@@ -34,6 +35,7 @@ public class RedisSessionMemoryService implements SessionMemoryService {
             redisTemplate.opsForList().rightPush(key, payload);
             redisTemplate.expire(key, TTL);
         } catch (JsonProcessingException e) {
+            // 序列化失败时仅记录日志，不中断主流程
             log.warn("Failed to serialize message for session {}", sessionId, e);
         }
     }
@@ -59,6 +61,7 @@ public class RedisSessionMemoryService implements SessionMemoryService {
         try {
             return objectMapper.readValue(payload, ChatMessage.class);
         } catch (JsonProcessingException e) {
+            // 反序列化失败返回空消息占位
             log.warn("Failed to deserialize chat message payload", e);
             return new ChatMessage("system", "", null);
         }

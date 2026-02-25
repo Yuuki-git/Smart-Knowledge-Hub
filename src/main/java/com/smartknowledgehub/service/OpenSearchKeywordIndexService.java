@@ -1,4 +1,4 @@
-package com.smartknowledgehub.service;
+﻿package com.smartknowledgehub.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartknowledgehub.config.OpenSearchProperties;
@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,26 +41,32 @@ public class OpenSearchKeywordIndexService implements KeywordIndexService {
         if (chunks == null || chunks.isEmpty()) {
             return;
         }
-        try {
-            StringBuilder ndjson = new StringBuilder();
-            for (ChunkPayload chunk : chunks) {
-                String id = chunk.getId() != null ? chunk.getId() : UUID.randomUUID().toString();
-                Map<String, Object> source = buildSource(chunk, id);
-                Map<String, Object> action = Map.of("index", Map.of("_index", properties.getIndexName(), "_id", id));
-                ndjson.append(objectMapper.writeValueAsString(action)).append("\n");
-                ndjson.append(objectMapper.writeValueAsString(source)).append("\n");
-            }
-            openSearchWebClient.post()
-                    .uri("/_bulk")
-                    .contentType(MediaType.APPLICATION_NDJSON)
-                    .bodyValue(ndjson.toString())
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-            log.info("Indexed {} chunks into OpenSearch index {}", chunks.size(), properties.getIndexName());
-        } catch (Exception ex) {
-            log.warn("OpenSearch bulk index failed", ex);
+        // 批量写入索引，减少请求次数
+        Mono.fromCallable(() -> buildNdjson(chunks))
+                .flatMap(ndjson -> openSearchWebClient.post()
+                        .uri("/_bulk")
+                        .contentType(MediaType.APPLICATION_NDJSON)
+                        .bodyValue(ndjson)
+                        .retrieve()
+                        .bodyToMono(String.class))
+                .doOnSuccess(resp -> log.info("Indexed {} chunks into OpenSearch index {}", chunks.size(), properties.getIndexName()))
+                .onErrorResume(ex -> {
+                    log.warn("OpenSearch bulk index failed", ex);
+                    return Mono.empty();
+                })
+                .block();
+    }
+
+    private String buildNdjson(List<ChunkPayload> chunks) throws Exception {
+        StringBuilder ndjson = new StringBuilder();
+        for (ChunkPayload chunk : chunks) {
+            String id = chunk.getId() != null ? chunk.getId() : UUID.randomUUID().toString();
+            Map<String, Object> source = buildSource(chunk, id);
+            Map<String, Object> action = Map.of("index", Map.of("_index", properties.getIndexName(), "_id", id));
+            ndjson.append(objectMapper.writeValueAsString(action)).append("\n");
+            ndjson.append(objectMapper.writeValueAsString(source)).append("\n");
         }
+        return ndjson.toString();
     }
 
     private Map<String, Object> buildSource(ChunkPayload chunk, String id) {
@@ -71,19 +78,19 @@ public class OpenSearchKeywordIndexService implements KeywordIndexService {
         }
         ChunkSource chunkSource = chunk.getSource();
         if (chunkSource != null) {
-            if (chunkSource.getFileName() != null) {
-                source.put(MetadataKeys.FILE_NAME, chunkSource.getFileName());
-            }
-            if (chunkSource.getPageNumber() != null) {
-                source.put(MetadataKeys.PAGE_NUMBER, chunkSource.getPageNumber());
-            }
-            if (chunkSource.getClassName() != null) {
-                source.put(MetadataKeys.CLASS_NAME, chunkSource.getClassName());
-            }
-            if (chunkSource.getMethodName() != null) {
-                source.put(MetadataKeys.METHOD_NAME, chunkSource.getMethodName());
-            }
+            putIfPresent(source, MetadataKeys.FILE_NAME, chunkSource.getFileName());
+            putIfPresent(source, MetadataKeys.PAGE_NUMBER, chunkSource.getPageNumber());
+            putIfPresent(source, MetadataKeys.CLASS_NAME, chunkSource.getClassName());
+            putIfPresent(source, MetadataKeys.METHOD_NAME, chunkSource.getMethodName());
         }
         return source;
     }
+    // 仅在字段存在时写入，减少重复判断
+    private void putIfPresent(Map<String, Object> target, String key, Object value) {
+        if (value == null) {
+            return;
+        }
+        target.put(key, value);
+    }
 }
+

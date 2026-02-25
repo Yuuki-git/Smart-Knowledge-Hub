@@ -14,6 +14,7 @@ import java.util.Optional;
 @ConditionalOnProperty(prefix = "app.rewrite", name = "enabled", havingValue = "true")
 public class LlmQueryRewriteService implements QueryRewriteService {
     private static final Logger log = LoggerFactory.getLogger(LlmQueryRewriteService.class);
+    // 仅输出改写后的检索问题，禁止附加解释
     private static final String SYSTEM_PROMPT = """
             You rewrite user questions into precise, search-friendly technical queries.
             Preserve the original language.
@@ -30,6 +31,7 @@ public class LlmQueryRewriteService implements QueryRewriteService {
 
     @Override
     public String rewrite(String query) {
+        // 空问题直接返回，减少无效调用
         if (query == null || query.isBlank()) {
             return query;
         }
@@ -37,6 +39,7 @@ public class LlmQueryRewriteService implements QueryRewriteService {
         if (chatClientOpt.isEmpty()) {
             return query;
         }
+        // 仅在边界处捕获异常，保证主流程可用
         try {
             String rewritten = chatClientOpt.get()
                     .prompt()

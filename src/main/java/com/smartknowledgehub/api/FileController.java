@@ -28,11 +28,13 @@ public class FileController {
 
     @PostMapping(value = "/files/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Mono<UploadResponse> upload(@RequestPart("file") FilePart file) {
+        // 上传后触发解析与索引
         return ingestionService.ingest(file);
     }
 
     @GetMapping("/ingestion/{jobId}")
     public Mono<Map<String, String>> status(@PathVariable @NotBlank String jobId) {
+        // 查询入库任务状态
         return ingestionService.status(jobId)
                 .map(status -> Map.of("jobId", jobId, "status", status))
                 .defaultIfEmpty(Map.of("jobId", jobId, "status", "NOT_FOUND"));

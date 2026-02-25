@@ -15,6 +15,7 @@ public class OpenSearchConfig {
     public WebClient openSearchWebClient(OpenSearchProperties properties) {
         WebClient.Builder builder = WebClient.builder()
                 .baseUrl(properties.getBaseUrl());
+        // 只有配置了账号时才启用 Basic Auth
         if (StringUtils.hasText(properties.getUsername())) {
             builder.filter(ExchangeFilterFunctions.basicAuthentication(
                     properties.getUsername(),

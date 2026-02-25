@@ -42,6 +42,7 @@ public class IngestionService {
         jobStatus.put(jobId, "QUEUED");
 
         Path target = storageRoot.resolve(documentId + "-" + sanitize(filePart.filename()));
+        // IO 与解析走阻塞线程池，避免占用事件循环
         return Mono.fromCallable(() -> Files.createDirectories(storageRoot))
                 .subscribeOn(Schedulers.boundedElastic())
                 .then(filePart.transferTo(target))
@@ -58,6 +59,7 @@ public class IngestionService {
     }
 
     private UploadResponse processFile(String documentId, String jobId, Path path, String originalName) {
+        // 在边界处统一处理异常，减少底层 try-catch
         try {
             jobStatus.put(jobId, "PROCESSING");
             List<ChunkPayload> chunks = documentChunkingService.chunk(path, documentId, originalName);

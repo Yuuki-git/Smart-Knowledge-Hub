@@ -23,6 +23,7 @@ public class ChatController {
 
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<ChatChunk>> chat(@Valid @RequestBody ChatRequest request) {
+        // SSE 流式输出答案
         return chatService.stream(request);
     }
 }

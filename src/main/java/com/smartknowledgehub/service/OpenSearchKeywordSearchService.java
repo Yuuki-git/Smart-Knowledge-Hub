@@ -1,4 +1,4 @@
-package com.smartknowledgehub.service;
+﻿package com.smartknowledgehub.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,13 +9,15 @@ import com.smartknowledgehub.model.RetrievedChunk;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @ConditionalOnProperty(prefix = "app.search", name = "enabled", havingValue = "true")
@@ -36,28 +38,30 @@ public class OpenSearchKeywordSearchService implements KeywordSearchService {
 
     @Override
     public List<RetrievedChunk> search(String query, int topK) {
-        try {
-            String body = objectMapper.writeValueAsString(
-                    new SearchBody(topK, new MatchContainer(new MatchQuery(query)))
-            );
-            String response = openSearchWebClient.post()
-                    .uri("/{index}/_search", properties.getIndexName())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(body)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block();
-            if (response == null || response.isBlank()) {
-                return List.of();
-            }
-            return parse(response);
-        } catch (Exception ex) {
-            log.warn("OpenSearch query failed", ex);
-            return List.of();
-        }
+        // 使用 match 查询，走 BM25 打分
+        Map<String, Object> body = Map.of(
+                "size", topK,
+                "query", Map.of("match", Map.of("text", query))
+        );
+
+        return openSearchWebClient.post()
+                .uri("/{index}/_search", properties.getIndexName())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(String.class)
+                .filter(response -> response != null && !response.isBlank())
+                .flatMap(response -> Mono.fromCallable(() -> parse(response)))
+                .onErrorResume(ex -> {
+                    log.warn("OpenSearch query failed", ex);
+                    return Mono.just(List.of());
+                })
+                .blockOptional()
+                .orElse(List.of());
     }
 
     private List<RetrievedChunk> parse(String response) throws Exception {
+        // 解析 OpenSearch hits
         JsonNode root = objectMapper.readTree(response);
         JsonNode hits = root.path("hits").path("hits");
         List<RetrievedChunk> results = new ArrayList<>();
@@ -81,12 +85,5 @@ public class OpenSearchKeywordSearchService implements KeywordSearchService {
         return results;
     }
 
-    private record SearchBody(int size, MatchContainer query) {
-    }
-
-    private record MatchContainer(MatchQuery match) {
-    }
-
-    private record MatchQuery(String text) {
-    }
 }
+

@@ -32,6 +32,7 @@ public class VectorSearchService {
     }
 
     public List<RetrievedChunk> search(String query, int topK) {
+        // 向量检索使用余弦相似度
         int resolvedTopK = topK > 0 ? topK : properties.getTopK();
         SearchRequest request = SearchRequest.builder()
                 .query(query)
@@ -48,6 +49,7 @@ public class VectorSearchService {
         if (chunks == null || chunks.isEmpty()) {
             return;
         }
+        // 批量写入向量库
         List<Document> documents = new ArrayList<>();
         for (ChunkPayload chunk : chunks) {
             documents.add(toDocument(chunk));
@@ -57,6 +59,7 @@ public class VectorSearchService {
     }
 
     private Document toDocument(ChunkPayload payload) {
+        // 将 chunk 映射到向量存储的文档结构
         String id = payload.getId() != null ? payload.getId() : UUID.randomUUID().toString();
         Map<String, Object> metadata = new HashMap<>();
         if (payload.getAttributes() != null) {
@@ -85,7 +88,7 @@ public class VectorSearchService {
         String chunkId = metadata != null ? asString(metadata.get(MetadataKeys.CHUNK_ID)) : null;
         String resolvedId = chunkId != null ? chunkId : document.getId();
         double score = document.getScore() != null ? document.getScore() : 0.0;
-        return new RetrievedChunk(resolvedId, document.getContent(), score, source);
+        return new RetrievedChunk(resolvedId, document.getText(), score, source);
     }
 
     private String asString(Object value) {

@@ -12,6 +12,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -19,6 +20,7 @@ import java.util.Optional;
 public class LlmRouter {
     private static final Logger log = LoggerFactory.getLogger(LlmRouter.class);
 
+    // 已加载的模型客户端
     private final Map<ModelProvider, ChatClient> clients = new EnumMap<>(ModelProvider.class);
 
     public LlmRouter(ObjectProvider<OpenAiChatModel> openAiProvider,
@@ -39,14 +41,12 @@ public class LlmRouter {
     }
 
     private Optional<ChatClient> defaultClient() {
-        if (clients.containsKey(ModelProvider.DEEPSEEK)) {
-            return Optional.of(clients.get(ModelProvider.DEEPSEEK));
-        }
-        if (clients.containsKey(ModelProvider.OPENAI)) {
-            return Optional.of(clients.get(ModelProvider.OPENAI));
-        }
-        if (clients.containsKey(ModelProvider.OLLAMA)) {
-            return Optional.of(clients.get(ModelProvider.OLLAMA));
+        // 按优先级选择默认模型，避免多段 if/else
+        for (ModelProvider provider : List.of(ModelProvider.DEEPSEEK, ModelProvider.OPENAI, ModelProvider.OLLAMA)) {
+            ChatClient client = clients.get(provider);
+            if (client != null) {
+                return Optional.of(client);
+            }
         }
         return Optional.empty();
     }

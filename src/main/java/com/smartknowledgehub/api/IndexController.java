@@ -26,6 +26,7 @@ public class IndexController {
 
     @PostMapping("/index")
     public Mono<Map<String, Object>> index(@Valid @RequestBody IndexRequest request) {
+        // 手动写入索引（用于调试/批处理）
         vectorSearchService.index(request.getChunks());
         keywordIndexService.index(request.getChunks());
         return Mono.just(Map.of("indexed", request.getChunks().size()));

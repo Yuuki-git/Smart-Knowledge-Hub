@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Service
 public class ChatService {
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
+    // 系统提示：严格依据检索上下文回答
     private static final String SYSTEM_PROMPT = """
             You are a senior Java architect.
             Only answer based on the provided Context.
@@ -46,6 +47,7 @@ public class ChatService {
     }
 
     public Flux<ServerSentEvent<ChatChunk>> stream(ChatRequest request) {
+        // 先做 Query Rewrite，再进入检索
         String rewrittenQuery = queryRewriteService.rewrite(request.getQuestion());
         List<RetrievedChunk> context = retrievalService.retrieve(rewrittenQuery, request.getTopK());
         if (context.isEmpty()) {
@@ -68,6 +70,7 @@ public class ChatService {
         system.add("[Context]");
         system.add(contextBlock);
 
+        // 流式拼接模型输出，最终用于落库
         AtomicReference<StringBuilder> answer = new AtomicReference<>(new StringBuilder());
         Flux<String> content = chatClientOpt.get()
                 .prompt()
@@ -82,6 +85,7 @@ public class ChatService {
         Flux<ServerSentEvent<ChatChunk>> deltas = content.map(token ->
                 ServerSentEvent.builder(ChatChunk.delta(token)).event("delta").build());
 
+        // final 事件返回完整答案 + 引用
         Mono<ServerSentEvent<ChatChunk>> finalEvent = Mono.fromSupplier(() -> {
             String finalAnswer = answer.get().toString();
             sessionMemoryService.appendMessage(

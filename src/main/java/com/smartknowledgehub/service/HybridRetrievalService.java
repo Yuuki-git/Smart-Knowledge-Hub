@@ -37,6 +37,7 @@ public class HybridRetrievalService implements RetrievalService {
         if (vectorResults.isEmpty()) {
             return keywordResults;
         }
+        // RRF 融合向量与关键词结果
         return fuseRrf(vectorResults, keywordResults, resolvedTopK, properties.getRrfK());
     }
 

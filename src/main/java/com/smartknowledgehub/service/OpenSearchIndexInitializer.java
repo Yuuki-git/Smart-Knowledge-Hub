@@ -35,12 +35,14 @@ public class OpenSearchIndexInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        // 可配置关闭自动创建，避免意外覆盖索引
         if (!properties.isAutoCreate()) {
             log.info("OpenSearch auto-create disabled. Skipping index initialization.");
             return;
         }
         String index = properties.getIndexName();
         try {
+            // 只在索引不存在时创建
             boolean exists = Boolean.TRUE.equals(openSearchWebClient.head()
                     .uri("/{index}", index)
                     .exchangeToMono(response -> response.statusCode().is2xxSuccessful()
