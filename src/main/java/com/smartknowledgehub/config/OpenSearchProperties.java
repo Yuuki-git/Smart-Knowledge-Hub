@@ -7,6 +7,9 @@ public class OpenSearchProperties {
     private boolean enabled = false;
     private String baseUrl = "http://localhost:9200";
     private String indexName = "chunks";
+    private boolean autoCreate = true;
+    private String analyzer = "standard";
+    private String searchAnalyzer = "standard";
     private String username;
     private String password;
 
@@ -32,6 +35,30 @@ public class OpenSearchProperties {
 
     public void setIndexName(String indexName) {
         this.indexName = indexName;
+    }
+
+    public boolean isAutoCreate() {
+        return autoCreate;
+    }
+
+    public void setAutoCreate(boolean autoCreate) {
+        this.autoCreate = autoCreate;
+    }
+
+    public String getAnalyzer() {
+        return analyzer;
+    }
+
+    public void setAnalyzer(String analyzer) {
+        this.analyzer = analyzer;
+    }
+
+    public String getSearchAnalyzer() {
+        return searchAnalyzer;
+    }
+
+    public void setSearchAnalyzer(String searchAnalyzer) {
+        this.searchAnalyzer = searchAnalyzer;
     }
 
     public String getUsername() {
