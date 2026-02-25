@@ -1,6 +1,7 @@
 package com.smartknowledgehub.api;
 
 import com.smartknowledgehub.model.IndexRequest;
+import com.smartknowledgehub.service.KeywordIndexService;
 import com.smartknowledgehub.service.VectorSearchService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,14 +16,18 @@ import java.util.Map;
 @RequestMapping("/api")
 public class IndexController {
     private final VectorSearchService vectorSearchService;
+    private final KeywordIndexService keywordIndexService;
 
-    public IndexController(VectorSearchService vectorSearchService) {
+    public IndexController(VectorSearchService vectorSearchService,
+                           KeywordIndexService keywordIndexService) {
         this.vectorSearchService = vectorSearchService;
+        this.keywordIndexService = keywordIndexService;
     }
 
     @PostMapping("/index")
     public Mono<Map<String, Object>> index(@Valid @RequestBody IndexRequest request) {
         vectorSearchService.index(request.getChunks());
+        keywordIndexService.index(request.getChunks());
         return Mono.just(Map.of("indexed", request.getChunks().size()));
     }
 }

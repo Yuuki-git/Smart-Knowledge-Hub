@@ -46,6 +46,12 @@ logging:
     com.smartknowledgehub: DEBUG
 
 app:
+  search:
+    enabled: ${OPENSEARCH_ENABLED:false}
+    base-url: ${OPENSEARCH_BASE_URL:http://localhost:9200}
+    index-name: ${OPENSEARCH_INDEX:chunks}
+    username: ${OPENSEARCH_USERNAME:}
+    password: ${OPENSEARCH_PASSWORD:}
   retrieval:
     top-k: ${RETRIEVAL_TOP_K:5}
     similarity-threshold: ${RETRIEVAL_SIMILARITY_THRESHOLD:0.7}

@@ -70,7 +70,7 @@ public class VectorSearchService {
             metadata.putIfAbsent(MetadataKeys.METHOD_NAME, source.getMethodName());
         }
         metadata.putIfAbsent(MetadataKeys.CHUNK_ID, id);
-        return new Document(payload.getText(), metadata);
+        return new Document(id, payload.getText(), metadata);
     }
 
     private RetrievedChunk map(Document document) {
@@ -85,7 +85,7 @@ public class VectorSearchService {
         String chunkId = metadata != null ? asString(metadata.get(MetadataKeys.CHUNK_ID)) : null;
         String resolvedId = chunkId != null ? chunkId : document.getId();
         double score = document.getScore() != null ? document.getScore() : 0.0;
-        return new RetrievedChunk(resolvedId, document.getText(), score, source);
+        return new RetrievedChunk(resolvedId, document.getContent(), score, source);
     }
 
     private String asString(Object value) {
