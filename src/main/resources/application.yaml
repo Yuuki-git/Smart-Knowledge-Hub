@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: smart-knowledge-hub
+  ai:
+    model:
+      embedding: ${AI_MODEL_EMBEDDING:openai}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o}
+      embedding:
+        options:
+          model: ${EMBEDDING_MODEL:text-embedding-3-small}
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+      chat:
+        options:
+          model: ${DEEPSEEK_MODEL:deepseek-chat}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${OLLAMA_MODEL:llama3}
+    vectorstore:
+      milvus:
+        client:
+          host: ${MILVUS_HOST:localhost}
+          port: ${MILVUS_PORT:19530}
+          username: ${MILVUS_USERNAME:}
+          password: ${MILVUS_PASSWORD:}
+        database-name: ${MILVUS_DATABASE:default}
+        collection-name: ${MILVUS_COLLECTION:vector_store}
+        embedding-dimension: ${EMBEDDING_DIMENSION:1536}
+        index-type: ${MILVUS_INDEX_TYPE:IVF_FLAT}
+        metric-type: ${MILVUS_METRIC_TYPE:COSINE}
+        initialize-schema: ${MILVUS_INIT_SCHEMA:true}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+logging:
+  level:
+    com.smartknowledgehub: DEBUG
+
+app:
+  retrieval:
+    top-k: ${RETRIEVAL_TOP_K:5}
+    similarity-threshold: ${RETRIEVAL_SIMILARITY_THRESHOLD:0.7}
+    rrf-k: ${RETRIEVAL_RRF_K:60}
