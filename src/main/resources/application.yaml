@@ -52,6 +52,10 @@ app:
     index-name: ${OPENSEARCH_INDEX:chunks}
     username: ${OPENSEARCH_USERNAME:}
     password: ${OPENSEARCH_PASSWORD:}
+  rewrite:
+    enabled: ${QUERY_REWRITE_ENABLED:false}
+    provider: ${QUERY_REWRITE_PROVIDER:AUTO}
+    max-length: ${QUERY_REWRITE_MAX_LENGTH:256}
   retrieval:
     top-k: ${RETRIEVAL_TOP_K:5}
     similarity-threshold: ${RETRIEVAL_SIMILARITY_THRESHOLD:0.7}
