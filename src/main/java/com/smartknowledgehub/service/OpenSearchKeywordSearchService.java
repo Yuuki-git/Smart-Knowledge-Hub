@@ -1,4 +1,4 @@
-﻿package com.smartknowledgehub.service;
+package com.smartknowledgehub.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

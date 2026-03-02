@@ -127,7 +127,7 @@
 <script setup>
 import { onMounted, ref } from "vue";
 
-const apiBase = import.meta.env.VITE_API_BASE || "";
+const apiBase = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8080";
 const sessionId = ref(loadSessionId());
 const messages = ref([]);
 const question = ref("");
@@ -184,10 +184,13 @@ async function uploadFile() {
   form.append("file", selectedFile.value);
 
   try {
-    const response = await fetch(`${apiBase}/api/files/upload`, {
+    const response = await fetch(buildApiUrl("/api/files/upload"), {
       method: "POST",
       body: form
     });
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.status}`);
+    }
     const data = await response.json();
     uploadStatus.value = {
       fileName: selectedFile.value.name,
@@ -213,7 +216,10 @@ async function uploadFile() {
 async function pollJobStatus(jobId) {
   if (!jobId) return;
   const timer = setInterval(async () => {
-    const res = await fetch(`${apiBase}/api/ingestion/${jobId}`);
+    const res = await fetch(buildApiUrl(`/api/ingestion/${jobId}`));
+    if (!res.ok) {
+      return;
+    }
     const data = await res.json();
     uploadStatus.value = {
       ...uploadStatus.value,
@@ -248,11 +254,14 @@ async function sendMessage() {
   };
 
   try {
-    const response = await fetch(`${apiBase}/api/chat`, {
+    const response = await fetch(buildApiUrl("/api/chat"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+    if (!response.ok) {
+      throw new Error(`Chat failed: ${response.status}`);
+    }
 
     if (!response.body) {
       throw new Error("No stream");
@@ -296,7 +305,12 @@ function handleSseEvent(rawEvent) {
     }
   }
   if (!data) return;
-  const parsed = JSON.parse(data);
+  let parsed;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return;
+  }
   if (eventType === "delta") {
     streamingBuffer.value += parsed.content || "";
   }
@@ -309,6 +323,13 @@ function handleSseEvent(rawEvent) {
       timestamp: new Date().toISOString()
     });
   }
+}
+
+function buildApiUrl(path) {
+  if (!apiBase) {
+    return path;
+  }
+  return `${apiBase}${path}`;
 }
 
 onMounted(() => {

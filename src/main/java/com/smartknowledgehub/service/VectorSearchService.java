@@ -1,6 +1,7 @@
 package com.smartknowledgehub.service;
 
 import com.smartknowledgehub.config.RetrievalProperties;
+import com.smartknowledgehub.config.VectorProperties;
 import com.smartknowledgehub.model.ChunkPayload;
 import com.smartknowledgehub.model.ChunkSource;
 import com.smartknowledgehub.model.MetadataKeys;
@@ -10,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -23,15 +25,23 @@ import java.util.stream.Collectors;
 public class VectorSearchService {
     private static final Logger log = LoggerFactory.getLogger(VectorSearchService.class);
 
-    private final VectorStore vectorStore;
+    private final ObjectProvider<VectorStore> vectorStoreProvider;
     private final RetrievalProperties properties;
+    private final VectorProperties vectorProperties;
 
-    public VectorSearchService(VectorStore vectorStore, RetrievalProperties properties) {
-        this.vectorStore = vectorStore;
+    public VectorSearchService(ObjectProvider<VectorStore> vectorStoreProvider,
+                               RetrievalProperties properties,
+                               VectorProperties vectorProperties) {
+        this.vectorStoreProvider = vectorStoreProvider;
         this.properties = properties;
+        this.vectorProperties = vectorProperties;
     }
 
     public List<RetrievedChunk> search(String query, int topK) {
+        VectorStore vectorStore = resolveVectorStore();
+        if (vectorStore == null) {
+            return List.of();
+        }
         // 向量检索使用余弦相似度
         int resolvedTopK = topK > 0 ? topK : properties.getTopK();
         SearchRequest request = SearchRequest.builder()
@@ -47,6 +57,10 @@ public class VectorSearchService {
 
     public void index(List<ChunkPayload> chunks) {
         if (chunks == null || chunks.isEmpty()) {
+            return;
+        }
+        VectorStore vectorStore = resolveVectorStore();
+        if (vectorStore == null) {
             return;
         }
         // 批量写入向量库
@@ -89,6 +103,17 @@ public class VectorSearchService {
         String resolvedId = chunkId != null ? chunkId : document.getId();
         double score = document.getScore() != null ? document.getScore() : 0.0;
         return new RetrievedChunk(resolvedId, document.getText(), score, source);
+    }
+
+    private VectorStore resolveVectorStore() {
+        if (!vectorProperties.isEnabled()) {
+            return null;
+        }
+        VectorStore vectorStore = vectorStoreProvider.getIfAvailable();
+        if (vectorStore == null) {
+            log.warn("Vector mode is enabled but no VectorStore bean is available.");
+        }
+        return vectorStore;
     }
 
     private String asString(Object value) {

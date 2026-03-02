@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Knowledge Hub</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      .container {
+        max-width: 800px;
+        margin: 64px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #111827;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+      }
+      h1 {
+        margin: 0 0 12px 0;
+        font-size: 28px;
+      }
+      p {
+        margin: 8px 0;
+        line-height: 1.6;
+      }
+      code {
+        background: #1e293b;
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+      ul {
+        margin: 12px 0 0 20px;
+      }
+      a {
+        color: #7dd3fc;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>Smart Knowledge Hub Backend</h1>
+        <p>The backend service is running.</p>
+        <p>If you want the Vue UI, build frontend assets and package the app.</p>
+        <ul>
+          <li>Chat SSE API: <code>POST /api/chat</code></li>
+          <li>Upload API: <code>POST /api/files/upload</code></li>
+          <li>Search API: <code>POST /api/search</code></li>
+        </ul>
+        <p>
+          Frontend dev server is typically on <code>http://localhost:5173</code>.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

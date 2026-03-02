@@ -1,0 +1,11 @@
+spring:
+  autoconfigure:
+    exclude: []
+  ai:
+    vectorstore:
+      milvus:
+        enabled: true
+
+app:
+  vector:
+    enabled: true
