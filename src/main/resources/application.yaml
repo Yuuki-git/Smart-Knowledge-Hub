@@ -16,7 +16,7 @@ spring:
         options:
           model: ${EMBEDDING_MODEL:text-embedding-3-small}
     deepseek:
-      api-key: ${DEEPSEEK_API_KEY:sk-3e3823d6948b40d18fe5fcaa09326818}
+      api-key: ${DEEPSEEK_API_KEY:}
       base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
       chat:
         options:
