@@ -34,16 +34,19 @@ public class ChatService {
     private final LlmRouter llmRouter;
     private final SessionMemoryService sessionMemoryService;
     private final QueryRewriteService queryRewriteService;
+    private final AnswerGroundingValidator answerGroundingValidator;
     private final CitationMapper citationMapper = new CitationMapper();
 
     public ChatService(RetrievalService retrievalService,
                        LlmRouter llmRouter,
                        SessionMemoryService sessionMemoryService,
-                       QueryRewriteService queryRewriteService) {
+                       QueryRewriteService queryRewriteService,
+                       AnswerGroundingValidator answerGroundingValidator) {
         this.retrievalService = retrievalService;
         this.llmRouter = llmRouter;
         this.sessionMemoryService = sessionMemoryService;
         this.queryRewriteService = queryRewriteService;
+        this.answerGroundingValidator = answerGroundingValidator;
     }
 
     public Flux<ServerSentEvent<ChatChunk>> stream(ChatRequest request) {
@@ -88,6 +91,14 @@ public class ChatService {
         // final 事件返回完整答案 + 引用
         Mono<ServerSentEvent<ChatChunk>> finalEvent = Mono.fromSupplier(() -> {
             String finalAnswer = answer.get().toString();
+            if (!answerGroundingValidator.hasGroundedClaim(finalAnswer, context)) {
+                String fallback = "Not found in the uploaded documents.";
+                sessionMemoryService.appendMessage(
+                        request.getSessionId(),
+                        new ChatMessage("assistant", fallback, Instant.now())
+                );
+                return ServerSentEvent.builder(ChatChunk.finalChunk(fallback, List.of())).event("final").build();
+            }
             sessionMemoryService.appendMessage(
                     request.getSessionId(),
                     new ChatMessage("assistant", finalAnswer, Instant.now())
