@@ -72,9 +72,29 @@
 
 ## 检索与融合策略
 
-- Query Rewrite：
-  - 可选开关 `app.rewrite.enabled`。
-  - 开启后先用 LLM 将用户问题改写为更可检索的查询。
+### Query 改写策略（Query Rewrite）
+
+当前 Query Rewrite 位于对话主链路最前置阶段（`ChatService`），即“先改写，再检索”。
+
+- 接口与实现：
+  - 统一接口：`QueryRewriteService`。
+  - 开启改写：`LlmQueryRewriteService`（`app.rewrite.enabled=true`）。
+  - 关闭改写：`NoOpQueryRewriteService`（直接返回原问题）。
+- 改写目标：
+  - 将口语化、模糊问题改成更适合检索的技术查询。
+  - 保留原始语言（中文问句输出中文改写，英文同理）。
+  - 仅输出改写后的查询文本，不附加解释。
+- 容错与回退：
+  - 为空问题、未配置可用 LLM、调用异常、改写结果为空时，全部回退原问题。
+  - 改写链路失败不影响主流程可用性。
+- 可调参数：
+  - `app.rewrite.enabled`：是否启用改写。
+  - `app.rewrite.provider`：改写使用的模型提供方（`AUTO`/`DEEPSEEK`/`OPENAI`/`OLLAMA`）。
+  - `app.rewrite.max-length`：改写结果最大长度（默认 `256`），超长截断。
+- 示例：
+  - 原问题：`怎么配？`
+  - 改写后：`Spring Cloud Nacos 配置中心在生产环境的集群部署与高可用配置步骤`
+
 - 关键词检索：
   - OpenSearch `match(text)`，走 BM25 打分。
 - 向量检索：
