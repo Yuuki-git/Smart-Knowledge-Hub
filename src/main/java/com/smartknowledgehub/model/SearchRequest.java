@@ -11,6 +11,8 @@ public class SearchRequest {
     @Min(1)
     @Max(20)
     private int topK = 5;
+    // Optional retrieval scope to limit search range.
+    private RetrievalScope scope;
 
     public String getQuery() {
         return query;
@@ -26,5 +28,13 @@ public class SearchRequest {
 
     public void setTopK(int topK) {
         this.topK = topK;
+    }
+
+    public RetrievalScope getScope() {
+        return scope;
+    }
+
+    public void setScope(RetrievalScope scope) {
+        this.scope = scope;
     }
 }

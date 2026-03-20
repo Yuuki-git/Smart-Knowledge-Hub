@@ -21,9 +21,9 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ChatService {
     private static final String NOT_FOUND_REPLY = "Not found in the uploaded documents.";
     private static final String NO_PROVIDER_REPLY = "No LLM provider is configured.";
-    // 按消息条数保留最近上下文（12 条约等于 6 轮对话）
+    // Keep a short sliding window of history messages.
     private static final int HISTORY_LIMIT = 12;
-    // 系统提示：历史仅用于消解指代，事实回答必须来自检索上下文
+    // History can disambiguate intent, but facts must come from retrieved context.
     private static final String SYSTEM_PROMPT = """
             You are a senior Java architect.
             Conversation History can only be used for intent disambiguation.
@@ -52,7 +52,7 @@ public class ChatService {
     }
 
     public Flux<ServerSentEvent<ChatChunk>> stream(ChatRequest request) {
-        // 先读取历史，再写入当前用户消息，避免同一问题重复进入历史块
+        // Read history first, then append current user message.
         List<ChatMessage> history = sessionMemoryService.recentMessages(request.getSessionId(), HISTORY_LIMIT);
         sessionMemoryService.appendMessage(
                 request.getSessionId(),
@@ -60,7 +60,7 @@ public class ChatService {
         );
 
         String rewrittenQuery = queryRewriteService.rewrite(request.getQuestion());
-        List<RetrievedChunk> context = retrievalService.retrieve(rewrittenQuery, request.getTopK());
+        List<RetrievedChunk> context = retrievalService.retrieve(rewrittenQuery, request.getTopK(), request.getScope());
         if (context.isEmpty()) {
             return fallback(request.getSessionId(), NOT_FOUND_REPLY);
         }

@@ -34,7 +34,11 @@ public class ChatController {
                         "sessionId", "demo-session",
                         "question", "Spring Cloud Nacos how to configure cluster?",
                         "modelProvider", "AUTO",
-                        "topK", 5
+                        "topK", 5,
+                        "scope", Map.of(
+                                "fileName", "nacos-config.md",
+                                "className", "NacosConfigService"
+                        )
                 )
         );
     }

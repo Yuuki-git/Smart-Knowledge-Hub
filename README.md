@@ -95,6 +95,21 @@
   - 原问题：`怎么配？`
   - 改写后：`Spring Cloud Nacos 配置中心在生产环境的集群部署与高可用配置步骤`
 
+### 检索作用域（Scope Filter）
+
+- 作用：
+  - 在检索阶段限定搜索范围，减少跨文档误召回。
+- 支持字段：
+  - `documentId`
+  - `fileName`
+  - `className`
+  - `methodName`
+- 生效位置：
+  - `POST /api/search`（调试检索）
+  - `POST /api/chat`（RAG 问答）
+- 示例：
+  - `"scope":{"fileName":"nacos-config.md","className":"NacosConfigService"}`
+
 - 关键词检索：
   - OpenSearch `match(text)`，走 BM25 打分。
 - 向量检索：
@@ -239,7 +254,7 @@ Milvus 配置文件：
 curl -N -X POST "http://127.0.0.1:8080/api/chat" \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
-  -d '{"sessionId":"demo","question":"Nacos 集群如何配置？","modelProvider":"AUTO","topK":5}'
+  -d '{"sessionId":"demo","question":"Nacos 集群如何配置？","modelProvider":"AUTO","topK":5,"scope":{"fileName":"nacos-config.md"}}'
 ```
 
 ## 常见问题

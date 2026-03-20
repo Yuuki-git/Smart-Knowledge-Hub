@@ -2,6 +2,7 @@ package com.smartknowledgehub.service;
 
 import com.smartknowledgehub.config.RetrievalProperties;
 import com.smartknowledgehub.model.RetrievedChunk;
+import com.smartknowledgehub.model.RetrievalScope;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -27,10 +28,10 @@ public class HybridRetrievalService implements RetrievalService {
     }
 
     @Override
-    public List<RetrievedChunk> retrieve(String query, int topK) {
+    public List<RetrievedChunk> retrieve(String query, int topK, RetrievalScope scope) {
         int resolvedTopK = topK > 0 ? topK : properties.getTopK();
-        List<RetrievedChunk> vectorResults = vectorSearchService.search(query, resolvedTopK);
-        List<RetrievedChunk> keywordResults = keywordSearchService.search(query, resolvedTopK);
+        List<RetrievedChunk> vectorResults = vectorSearchService.search(query, resolvedTopK, scope);
+        List<RetrievedChunk> keywordResults = keywordSearchService.search(query, resolvedTopK, scope);
         if (keywordResults.isEmpty()) {
             return vectorResults;
         }

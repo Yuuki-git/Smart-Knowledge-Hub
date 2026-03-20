@@ -6,6 +6,7 @@ import com.smartknowledgehub.model.ChunkPayload;
 import com.smartknowledgehub.model.ChunkSource;
 import com.smartknowledgehub.model.MetadataKeys;
 import com.smartknowledgehub.model.RetrievedChunk;
+import com.smartknowledgehub.model.RetrievalScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -38,20 +40,27 @@ public class VectorSearchService {
     }
 
     public List<RetrievedChunk> search(String query, int topK) {
+        return search(query, topK, null);
+    }
+
+    public List<RetrievedChunk> search(String query, int topK, RetrievalScope scope) {
         VectorStore vectorStore = resolveVectorStore();
         if (vectorStore == null) {
             return List.of();
         }
-        // 向量检索使用余弦相似度
+        // 作用域过滤会裁剪结果，先扩召回再按 scope 过滤
         int resolvedTopK = topK > 0 ? topK : properties.getTopK();
+        int fetchTopK = hasScope(scope) ? Math.min(resolvedTopK * 5, 200) : resolvedTopK;
         SearchRequest request = SearchRequest.builder()
                 .query(query)
-                .topK(resolvedTopK)
+                .topK(fetchTopK)
                 .similarityThreshold(properties.getSimilarityThreshold())
                 .build();
         List<Document> results = vectorStore.similaritySearch(request);
         return results.stream()
+                .filter(document -> matchesScope(document.getMetadata(), scope))
                 .map(this::map)
+                .limit(resolvedTopK)
                 .collect(Collectors.toList());
     }
 
@@ -63,7 +72,6 @@ public class VectorSearchService {
         if (vectorStore == null) {
             return;
         }
-        // 批量写入向量库
         List<Document> documents = new ArrayList<>();
         for (ChunkPayload chunk : chunks) {
             documents.add(toDocument(chunk));
@@ -73,7 +81,6 @@ public class VectorSearchService {
     }
 
     private Document toDocument(ChunkPayload payload) {
-        // 将 chunk 映射到向量存储的文档结构
         String id = payload.getId() != null ? payload.getId() : UUID.randomUUID().toString();
         Map<String, Object> metadata = new HashMap<>();
         if (payload.getAttributes() != null) {
@@ -114,6 +121,27 @@ public class VectorSearchService {
             log.warn("Vector mode is enabled but no VectorStore bean is available.");
         }
         return vectorStore;
+    }
+
+    private boolean hasScope(RetrievalScope scope) {
+        return scope != null && !scope.isEmpty();
+    }
+
+    private boolean matchesScope(Map<String, Object> metadata, RetrievalScope scope) {
+        if (!hasScope(scope)) {
+            return true;
+        }
+        if (metadata == null || metadata.isEmpty()) {
+            return false;
+        }
+        return matches(asString(metadata.get(MetadataKeys.DOCUMENT_ID)), scope.getDocumentId())
+                && matches(asString(metadata.get(MetadataKeys.FILE_NAME)), scope.getFileName())
+                && matches(asString(metadata.get(MetadataKeys.CLASS_NAME)), scope.getClassName())
+                && matches(asString(metadata.get(MetadataKeys.METHOD_NAME)), scope.getMethodName());
+    }
+
+    private boolean matches(String value, String expected) {
+        return expected == null || expected.isBlank() || Objects.equals(value, expected);
     }
 
     private String asString(Object value) {

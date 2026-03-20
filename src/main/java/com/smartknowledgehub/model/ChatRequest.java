@@ -16,6 +16,8 @@ public class ChatRequest {
     @Min(1)
     @Max(20)
     private int topK = 5;
+    // Optional retrieval scope to limit search range.
+    private RetrievalScope scope;
 
     private String traceId;
 
@@ -49,6 +51,14 @@ public class ChatRequest {
 
     public void setTopK(int topK) {
         this.topK = topK;
+    }
+
+    public RetrievalScope getScope() {
+        return scope;
+    }
+
+    public void setScope(RetrievalScope scope) {
+        this.scope = scope;
     }
 
     public String getTraceId() {

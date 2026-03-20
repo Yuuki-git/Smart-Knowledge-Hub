@@ -20,7 +20,7 @@ public class SearchController {
 
     @PostMapping("/search")
     public SearchResponse search(@Valid @RequestBody SearchRequest request) {
-        // 检索调试接口，返回融合后的结果
-        return new SearchResponse(retrievalService.retrieve(request.getQuery(), request.getTopK()));
+        // 检索调试接口，返回混合检索后的结果
+        return new SearchResponse(retrievalService.retrieve(request.getQuery(), request.getTopK(), request.getScope()));
     }
 }
