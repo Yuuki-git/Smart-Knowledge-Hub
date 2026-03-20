@@ -69,3 +69,10 @@ app:
     top-k: ${RETRIEVAL_TOP_K:5}
     similarity-threshold: ${RETRIEVAL_SIMILARITY_THRESHOLD:0.7}
     rrf-k: ${RETRIEVAL_RRF_K:60}
+  persistence:
+    postgres:
+      enabled: ${POSTGRES_ENABLED:false}
+      url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/smart_knowledge_hub}
+      username: ${POSTGRES_USERNAME:postgres}
+      password: ${POSTGRES_PASSWORD:postgres}
+      init-schema: ${POSTGRES_INIT_SCHEMA:true}

@@ -21,22 +21,27 @@ public class RedisSessionMemoryService implements SessionMemoryService {
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final ConversationArchiveService archiveService;
 
-    public RedisSessionMemoryService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
+    public RedisSessionMemoryService(StringRedisTemplate redisTemplate,
+                                     ObjectMapper objectMapper,
+                                     ConversationArchiveService archiveService) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
+        this.archiveService = archiveService;
     }
 
     @Override
     public void appendMessage(String sessionId, ChatMessage message) {
+        archiveSafely(sessionId, message);
         String key = key(sessionId);
         try {
             String payload = objectMapper.writeValueAsString(message);
             redisTemplate.opsForList().rightPush(key, payload);
             redisTemplate.expire(key, TTL);
-        } catch (JsonProcessingException e) {
-            // 序列化失败时仅记录日志，不中断主流程
-            log.warn("Failed to serialize message for session {}", sessionId, e);
+        } catch (JsonProcessingException ex) {
+            // Redis 序列化失败仅记录日志，不中断主流程
+            log.warn("Failed to serialize message for session {}", sessionId, ex);
         }
     }
 
@@ -60,14 +65,23 @@ public class RedisSessionMemoryService implements SessionMemoryService {
     private ChatMessage deserialize(String payload) {
         try {
             return objectMapper.readValue(payload, ChatMessage.class);
-        } catch (JsonProcessingException e) {
-            // 反序列化失败返回空消息占位
-            log.warn("Failed to deserialize chat message payload", e);
+        } catch (JsonProcessingException ex) {
+            // 反序列化失败返回空消息占位，避免影响历史读取
+            log.warn("Failed to deserialize chat message payload", ex);
             return new ChatMessage("system", "", null);
         }
     }
 
     private String key(String sessionId) {
         return "session:" + sessionId + ":messages";
+    }
+
+    // PostgreSQL 归档失败不影响在线对话主流程
+    private void archiveSafely(String sessionId, ChatMessage message) {
+        try {
+            archiveService.append(sessionId, message);
+        } catch (Exception ex) {
+            log.warn("Failed to archive message into PostgreSQL for session {}", sessionId, ex);
+        }
     }
 }

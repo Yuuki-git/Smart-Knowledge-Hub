@@ -19,9 +19,9 @@
 - OpenSearch 关键词索引与检索。
 - Milvus 向量索引与检索（可选开关）。
 - Vue 前端聊天页（流式输出 + 引用展示）。
+- PostgreSQL 元数据持久化（`document/chunk/conversation/message/ingestion_job`，可选开关）。
 
 待完善：
-- PostgreSQL 全量持久化（`document/chunk/conversation/job`）。
 - 生产化能力（鉴权、多租户隔离、监控、测试）。
 
 ## 技术栈
@@ -121,6 +121,36 @@
 - 来源溯源：
   - `final` 事件携带 `citations`，包含文件/页码/类名/方法名来源。
 
+## 对话上下文实现方法（Conversation Context）
+
+当前“上下文”由两部分组成：`Conversation History`（会话历史）+ `Context`（检索结果），并在同一条 Prompt 中组装。
+
+- 入口：
+  - `POST /api/chat` 传入 `sessionId`、`question`、`topK`、`modelProvider`。
+- 会话历史读取与写入：
+  - 读取最近历史：`SessionMemoryService.recentMessages(sessionId, HISTORY_LIMIT)`。
+  - 当前实现 `HISTORY_LIMIT = 12`（约 6 轮对话），位于 `ChatService`。
+  - 历史读取后立即写入当前用户消息，避免同轮问题重复出现在历史块中。
+  - Redis 实现为 `RedisSessionMemoryService`，Key 结构：`session:{sessionId}:messages`，TTL 为 12 小时。
+- 检索链路：
+  - 先执行 Query Rewrite，再按改写后的查询做混合检索。
+  - 若检索为空，直接返回拒答，不进入生成阶段。
+- Prompt 组装：
+  - 系统提示中明确：`Conversation History` 仅用于指代消解。
+  - 回答事实必须来自 `[Context]`，不能仅依据历史聊天内容。
+  - Prompt 结构固定为：`SYSTEM_PROMPT` + `[Conversation History]` + `[Context]`。
+- 生成与落库：
+  - 模型输出通过 SSE `delta` 事件流式返回。
+  - 结束时返回 `final` 事件（完整答案 + citations）。
+  - `final` 前经过 grounded 校验；失败则回退拒答文本。
+  - 助手最终回复（含回退文本）写回 Redis，供下一轮历史读取。
+
+关键实现文件：
+- `src/main/java/com/smartknowledgehub/service/ChatService.java`
+- `src/main/java/com/smartknowledgehub/service/SessionMemoryService.java`
+- `src/main/java/com/smartknowledgehub/service/RedisSessionMemoryService.java`
+- `src/main/java/com/smartknowledgehub/service/AnswerGroundingValidator.java`
+
 ## 本地运行
 
 ### 1. 启动依赖服务
@@ -192,6 +222,7 @@ Milvus 配置文件：
 - `REDIS_HOST`、`REDIS_PORT`
 - `OPENSEARCH_BASE_URL`、`OPENSEARCH_ENABLED`
 - `MILVUS_HOST`、`MILVUS_PORT`
+- `POSTGRES_ENABLED`、`POSTGRES_URL`、`POSTGRES_USERNAME`、`POSTGRES_PASSWORD`、`POSTGRES_INIT_SCHEMA`
 
 ## 接口列表
 

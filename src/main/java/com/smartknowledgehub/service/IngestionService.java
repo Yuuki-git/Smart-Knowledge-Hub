@@ -14,34 +14,34 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class IngestionService {
     private static final Logger log = LoggerFactory.getLogger(IngestionService.class);
 
     private final Path storageRoot = Paths.get("data", "uploads");
-    private final Map<String, String> jobStatus = new ConcurrentHashMap<>();
     private final DocumentChunkingService documentChunkingService;
     private final VectorSearchService vectorSearchService;
     private final KeywordIndexService keywordIndexService;
+    private final IngestionMetadataStore metadataStore;
 
     public IngestionService(DocumentChunkingService documentChunkingService,
                             VectorSearchService vectorSearchService,
-                            KeywordIndexService keywordIndexService) {
+                            KeywordIndexService keywordIndexService,
+                            IngestionMetadataStore metadataStore) {
         this.documentChunkingService = documentChunkingService;
         this.vectorSearchService = vectorSearchService;
         this.keywordIndexService = keywordIndexService;
+        this.metadataStore = metadataStore;
     }
 
     public Mono<UploadResponse> ingest(FilePart filePart) {
         String documentId = UUID.randomUUID().toString();
         String jobId = UUID.randomUUID().toString();
-        jobStatus.put(jobId, "QUEUED");
-
         Path target = storageRoot.resolve(documentId + "-" + sanitize(filePart.filename()));
+        metadataStore.createJob(jobId, documentId, filePart.filename(), target.toString());
+
         // IO 与解析走阻塞线程池，避免占用事件循环
         return Mono.fromCallable(() -> Files.createDirectories(storageRoot))
                 .subscribeOn(Schedulers.boundedElastic())
@@ -51,7 +51,7 @@ public class IngestionService {
     }
 
     public Mono<String> status(String jobId) {
-        return Mono.justOrEmpty(jobStatus.get(jobId));
+        return Mono.justOrEmpty(metadataStore.findJobStatus(jobId));
     }
 
     private String sanitize(String filename) {
@@ -59,21 +59,23 @@ public class IngestionService {
     }
 
     private UploadResponse processFile(String documentId, String jobId, Path path, String originalName) {
-        // 在边界处统一处理异常，减少底层 try-catch
+        // 在边界统一处理异常，底层链路按正常路径执行
         try {
-            jobStatus.put(jobId, "PROCESSING");
+            metadataStore.markJobProcessing(jobId);
             List<ChunkPayload> chunks = documentChunkingService.chunk(path, documentId, originalName);
+            metadataStore.saveDocument(documentId, originalName, path.toAbsolutePath().toString());
             if (chunks.isEmpty()) {
-                jobStatus.put(jobId, "EMPTY");
+                metadataStore.markJobEmpty(jobId);
                 return new UploadResponse(documentId, jobId, "EMPTY");
             }
+            metadataStore.saveChunks(documentId, chunks);
             vectorSearchService.index(chunks);
             keywordIndexService.index(chunks);
-            jobStatus.put(jobId, "INDEXED");
+            metadataStore.markJobIndexed(jobId);
             log.info("Indexed document {} ({} chunks) at {}", documentId, chunks.size(), Instant.now());
             return new UploadResponse(documentId, jobId, "INDEXED");
         } catch (Exception ex) {
-            jobStatus.put(jobId, "FAILED");
+            metadataStore.markJobFailed(jobId, ex.getMessage());
             log.warn("Failed ingestion for document {}", documentId, ex);
             return new UploadResponse(documentId, jobId, "FAILED");
         }
