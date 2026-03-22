@@ -1,0 +1,4 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Fri Mar 20 21:48:41 CST 2026
+@default-alimaven-central-http\://maven.aliyun.com/nexus/content/repositories/central/.lastUpdated=1774014521093
+http\://maven.aliyun.com/nexus/content/repositories/central/.error=Could not transfer artifact org.springframework.boot\:spring-boot-starter-parent\:pom\:3.5.8 from/to alimaven-central (http\://maven.aliyun.com/nexus/content/repositories/central/)\: Transfer failed for http\://maven.aliyun.com/nexus/content/repositories/central/org/springframework/boot/spring-boot-starter-parent/3.5.8/spring-boot-starter-parent-3.5.8.pom
