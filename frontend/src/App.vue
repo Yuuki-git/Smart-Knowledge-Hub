@@ -44,6 +44,7 @@
 
           <div v-if="uploadStatus" class="mt-4 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-200">
             <div>文件: {{ uploadStatus.fileName }}</div>
+            <div>DocumentId: {{ uploadStatus.documentId }}</div>
             <div>Job: {{ uploadStatus.jobId }}</div>
             <div>状态: {{ uploadStatus.status }}</div>
           </div>
@@ -69,6 +70,31 @@
                 <option value="OPENAI">OPENAI</option>
                 <option value="OLLAMA">OLLAMA</option>
               </select>
+              <label class="text-xs uppercase tracking-widest text-slate-400">Scope</label>
+              <input
+                v-model="scopeDocumentId"
+                type="text"
+                class="mono rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm"
+                placeholder="documentId (optional)"
+              />
+              <input
+                v-model="scopeFileName"
+                type="text"
+                class="mono rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm"
+                placeholder="fileName (optional)"
+              />
+              <input
+                v-model="scopeClassName"
+                type="text"
+                class="mono rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm"
+                placeholder="className (optional)"
+              />
+              <input
+                v-model="scopeMethodName"
+                type="text"
+                class="mono rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm"
+                placeholder="methodName (optional)"
+              />
             </div>
           </div>
         </section>
@@ -135,6 +161,10 @@ const streaming = ref(false);
 const streamingBuffer = ref("");
 const modelProvider = ref("AUTO");
 const topK = ref(5);
+const scopeDocumentId = ref("");
+const scopeFileName = ref("");
+const scopeClassName = ref("");
+const scopeMethodName = ref("");
 
 const selectedFile = ref(null);
 const fileInput = ref(null);
@@ -194,13 +224,18 @@ async function uploadFile() {
     const data = await response.json();
     uploadStatus.value = {
       fileName: selectedFile.value.name,
+      documentId: data.documentId,
       jobId: data.jobId,
       status: data.status
     };
+    if (data.documentId) {
+      scopeDocumentId.value = data.documentId;
+    }
     pollJobStatus(data.jobId);
   } catch (error) {
     uploadStatus.value = {
       fileName: selectedFile.value.name,
+      documentId: "-",
       jobId: "-",
       status: "FAILED"
     };
@@ -245,6 +280,7 @@ async function sendMessage() {
   streaming.value = true;
   streamingBuffer.value = "";
   question.value = "";
+  const scope = buildScope();
 
   const payload = {
     sessionId: sessionId.value,
@@ -252,6 +288,9 @@ async function sendMessage() {
     modelProvider: modelProvider.value,
     topK: topK.value
   };
+  if (scope) {
+    payload.scope = scope;
+  }
 
   try {
     const response = await fetch(buildApiUrl("/api/chat"), {
@@ -291,6 +330,22 @@ async function sendMessage() {
     streaming.value = false;
     streamingBuffer.value = "";
   }
+}
+
+function buildScope() {
+  const scope = {};
+  putIfNotBlank(scope, "documentId", scopeDocumentId.value);
+  putIfNotBlank(scope, "fileName", scopeFileName.value);
+  putIfNotBlank(scope, "className", scopeClassName.value);
+  putIfNotBlank(scope, "methodName", scopeMethodName.value);
+  return Object.keys(scope).length > 0 ? scope : null;
+}
+
+function putIfNotBlank(target, key, value) {
+  if (!value || !value.trim()) {
+    return;
+  }
+  target[key] = value.trim();
 }
 
 function handleSseEvent(rawEvent) {
