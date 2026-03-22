@@ -1,199 +1,151 @@
-# Smart Knowledge Hub
+# Smart Knowledge Hub（智能代码助手）
 
-`Smart Knowledge Hub` 是一个基于 `Spring Boot + Spring AI` 的 RAG 智能助手，面向 `Spring Cloud` 架构文档、Java 代码与运维知识分析场景。
+一个面向 **Spring Cloud 分布式架构文档、Java 代码与运维日志** 的 RAG 项目。  
+目标是让回答“可检索、可溯源、可控幻觉”，并能在真实工程中落地。
 
-## 主要能力
+## 项目亮点
 
-- 支持上传 `PDF`、`Markdown`、`Java` 文件。
-- 自动解析并切片（页级/标题级/类方法级）。
-- 混合检索：`OpenSearch(BM25)` + `Milvus(向量)`，并用 `RRF` 融合排序。
-- 对话接口 `POST /api/chat` 采用 `SSE` 流式返回。
-- 回答附带引用信息（文件/页码/类名/方法名等）。
-- `Redis` 存储会话消息。
-- 多模型路由：`DEEPSEEK`、`OPENAI`、`OLLAMA`、`AUTO`。
+- 多源入库：支持 `PDF`、`Markdown`、`Java` 文件上传与自动解析
+- 混合检索：`OpenSearch(BM25)` + `Milvus(向量)` + `RRF` 融合排序
+- 检索作用域：支持按 `documentId/fileName/className/methodName` 限定检索范围
+- 多轮对话：基于 Redis 会话记忆，SSE 流式返回
+- 回答溯源：`final` 结果携带 citations（文件/页码/类/方法）
+- 多模型适配：`DEEPSEEK`、`OPENAI`、`OLLAMA`、`AUTO`
+- 可选持久化：PostgreSQL 归档文档、切片、入库任务与会话消息
 
-## 当前进度
+---
 
-已可用：
-- 上传与入库流程。
-- OpenSearch 关键词索引与检索。
-- Milvus 向量索引与检索（可选开关）。
-- Vue 前端聊天页（流式输出 + 引用展示）。
-- PostgreSQL 元数据持久化（`document/chunk/conversation/message/ingestion_job`，可选开关）。
+## 架构概览
 
-待完善：
-- 生产化能力（鉴权、多租户隔离、监控、测试）。
+1. **数据入库流**
+   - `POST /api/files/upload`
+   - `DocumentChunkingService` 解析 + 切片
+   - 写入向量索引与关键词索引
+   - 更新入库任务状态（`QUEUED/PROCESSING/INDEXED/EMPTY/FAILED`）
+
+2. **检索增强流**
+   - Query Rewrite（可选）
+   - 向量检索 + BM25 关键词检索
+   - RRF 融合排序输出 Top-K
+   - Scope 过滤限定检索范围
+
+3. **生成流**
+   - Prompt 强约束：只允许依据检索上下文回答
+   - SSE `delta` 流式输出
+   - `final` 返回完整答案 + citations
+   - grounded 校验失败时回退拒答
+
+---
+
+## 核心策略
+
+### 1) 切片策略（Chunking）
+
+实现：`src/main/java/com/smartknowledgehub/service/DocumentChunkingService.java`
+
+- 通用切片
+  - `MAX_CHARS = 1200`
+  - `OVERLAP_PARAGRAPHS = 1`（相邻 chunk 保留段落重叠）
+- PDF：按页提取后再聚合，保留 `page_number`
+- Markdown：先按标题（`#`）分 section，再段落聚合
+- Java：优先按类/方法/构造函数切片，保留 `class_name`、`method_name`
+- 兜底：JavaParser 或结构化解析失败时，自动降级为纯文本切片
+
+统一元数据字段：
+
+- `document_id`
+- `chunk_index`
+- `chunk_id`
+- `file_name`
+- `page_number`
+- `class_name`
+- `method_name`
+
+### 2) 代码解析策略（Code Parsing）
+
+- 解析器：`JavaParser`
+- 路径：`CompilationUnit -> ClassOrInterfaceDeclaration -> Method/Constructor`
+- 原则：**结构优先**，尽量让 1 个 chunk 对应 1 个语义单元
+- 回退：解析异常不影响入库主流程
+
+### 3) Query Rewrite
+
+- 接口：`QueryRewriteService`
+- 开启：`app.rewrite.enabled=true`（`LlmQueryRewriteService`）
+- 关闭：`NoOpQueryRewriteService`（直接返回原问题）
+- 要求：保持原语言，只输出改写后的查询，不附加解释
+- 回退：模型不可用/异常时回退原问题
+
+### 4) 检索作用域（Scope Filter）
+
+请求字段：
+
+- `documentId`
+- `fileName`
+- `className`
+- `methodName`
+
+生效接口：
+
+- `POST /api/search`
+- `POST /api/chat`
+
+说明：
+
+- 作用域为精确匹配
+- 空字段不参与过滤
+- 作用域过窄会导致检索为空
+
+### 5) 反幻觉策略（Hallucination Guardrails）
+
+- 检索为空：直接返回 `Not found in the uploaded documents.`
+- Prompt 约束：仅能依据 `[Context]` 回答
+- 最终闸门：`AnswerGroundingValidator`
+  - `MIN_OVERLAP_TOKENS = 2`
+  - `MIN_SENTENCE_LENGTH = 6`
+- 校验失败：强制回退拒答文本
+
+---
 
 ## 技术栈
 
-- 后端：`Spring Boot 3.5.x`、`Spring WebFlux`、`Spring AI`。
-- 检索：`OpenSearch`（BM25）、`Milvus`（向量，可选）。
-- 会话：`Redis`。
-- 解析：`Apache Tika`、`PDFBox`、`JavaParser`。
-- 前端：`Vue 3` + `Tailwind` + `Vite`。
+- 后端：`Spring Boot 3.5.x`、`Spring WebFlux`、`Spring AI`
+- 检索：`OpenSearch`、`Milvus`
+- 解析：`Apache Tika`、`PDFBox`、`JavaParser`
+- 缓存/会话：`Redis`
+- 持久化（可选）：`PostgreSQL`
+- 前端：`Vue 3` + `Tailwind CSS` + `Vite`
 
-## 切片策略（Chunking Strategy）
+---
 
-当前切片实现位于 `DocumentChunkingService`，核心目标是“尽量保留语义边界 + 可追溯元数据”。
+## 快速开始
 
-- 通用聚合策略：
-  - 按段落聚合为 chunk，默认 `MAX_CHARS = 1200`。
-  - 邻接 chunk 保留重叠段落，默认 `OVERLAP_PARAGRAPHS = 1`，降低上下文断裂。
-- PDF 策略：
-  - 先按页提取文本，再做段落聚合。
-  - 元数据保留 `page_number`，用于引用定位。
-- Markdown 策略：
-  - 按标题行（`#`）切分为 section，再做段落聚合。
-  - 保留文件级来源信息。
-- Java 策略：
-  - 以类/方法/构造函数为主切片单元。
-  - 方法和构造函数优先作为独立 chunk。
-  - 仅有类声明（无方法/构造）时，按类体文本切片。
-- 兜底策略：
-  - 非上述类型走 Tika 解析并按纯文本段落切片。
-- 统一元数据：
-  - `document_id`、`chunk_index`、`file_name`、`page_number`、`class_name`、`method_name`、`chunk_id`。
+### 环境要求
 
-## 代码解析策略（Code Parsing Strategy）
+- JDK `17+`
+- Maven `3.9+`
+- Node.js `20+`（前端开发/打包）
+- Redis（会话必需）
+- 可选：OpenSearch、Milvus、PostgreSQL
 
-当前代码解析目标是“结构优先，而非按字数硬切”。
-
-- 解析器：`JavaParser`。
-- 解析过程：
-  - 读取 `CompilationUnit`。
-  - 遍历 `ClassOrInterfaceDeclaration`。
-  - 提取每个类下的方法与构造函数。
-  - 以 `method.toString()` / `constructor.toString()` 作为 chunk 内容。
-- 解析异常处理：
-  - Java 语法不完整或解析失败时，自动降级为纯文本切片，不中断入库流程。
-- 设计原则：
-  - 优先保持“一个 chunk 对应一个代码语义单元（方法/构造）”。
-  - 保留 `class_name` 与 `method_name` 元数据用于引用与检索过滤。
-
-## 检索与融合策略
-
-### Query 改写策略（Query Rewrite）
-
-当前 Query Rewrite 位于对话主链路最前置阶段（`ChatService`），即“先改写，再检索”。
-
-- 接口与实现：
-  - 统一接口：`QueryRewriteService`。
-  - 开启改写：`LlmQueryRewriteService`（`app.rewrite.enabled=true`）。
-  - 关闭改写：`NoOpQueryRewriteService`（直接返回原问题）。
-- 改写目标：
-  - 将口语化、模糊问题改成更适合检索的技术查询。
-  - 保留原始语言（中文问句输出中文改写，英文同理）。
-  - 仅输出改写后的查询文本，不附加解释。
-- 容错与回退：
-  - 为空问题、未配置可用 LLM、调用异常、改写结果为空时，全部回退原问题。
-  - 改写链路失败不影响主流程可用性。
-- 可调参数：
-  - `app.rewrite.enabled`：是否启用改写。
-  - `app.rewrite.provider`：改写使用的模型提供方（`AUTO`/`DEEPSEEK`/`OPENAI`/`OLLAMA`）。
-  - `app.rewrite.max-length`：改写结果最大长度（默认 `256`），超长截断。
-- 示例：
-  - 原问题：`怎么配？`
-  - 改写后：`Spring Cloud Nacos 配置中心在生产环境的集群部署与高可用配置步骤`
-
-### 检索作用域（Scope Filter）
-
-- 作用：
-  - 在检索阶段限定搜索范围，减少跨文档误召回。
-- 支持字段：
-  - `documentId`
-  - `fileName`
-  - `className`
-  - `methodName`
-- 生效位置：
-  - `POST /api/search`（调试检索）
-  - `POST /api/chat`（RAG 问答）
-- 示例：
-  - `"scope":{"fileName":"nacos-config.md","className":"NacosConfigService"}`
-
-- 关键词检索：
-  - OpenSearch `match(text)`，走 BM25 打分。
-- 向量检索：
-  - Milvus 相似度检索（可选开关）。
-- 混合融合：
-  - 使用 RRF（Reciprocal Rank Fusion），公式近似 `1 / (rrfK + rank)`。
-  - 默认参数在 `app.retrieval.rrf-k`。
-
-## 反幻觉策略（Hallucination Guardrails）
-
-当前是“检索约束 + 生成约束 + 最终闸门”三层机制：
-
-- 检索闸门：
-  - 若检索上下文为空，直接返回 `Not found in the uploaded documents.`。
-- Prompt 约束：
-  - 系统提示要求仅依据 `Context` 作答，未命中必须拒答。
-- 最终答案闸门：
-  - 在 `final` 输出前做 grounded 校验（`AnswerGroundingValidator`）。
-  - 策略为“按句分割答案，与检索上下文 token 重叠匹配”。
-  - 默认阈值：
-    - `MIN_OVERLAP_TOKENS = 2`
-    - `MIN_SENTENCE_LENGTH = 6`
-  - 若校验失败，强制回退拒答文本，不返回编造内容。
-- 来源溯源：
-  - `final` 事件携带 `citations`，包含文件/页码/类名/方法名来源。
-
-## 对话上下文实现方法（Conversation Context）
-
-当前“上下文”由两部分组成：`Conversation History`（会话历史）+ `Context`（检索结果），并在同一条 Prompt 中组装。
-
-- 入口：
-  - `POST /api/chat` 传入 `sessionId`、`question`、`topK`、`modelProvider`。
-- 会话历史读取与写入：
-  - 读取最近历史：`SessionMemoryService.recentMessages(sessionId, HISTORY_LIMIT)`。
-  - 当前实现 `HISTORY_LIMIT = 12`（约 6 轮对话），位于 `ChatService`。
-  - 历史读取后立即写入当前用户消息，避免同轮问题重复出现在历史块中。
-  - Redis 实现为 `RedisSessionMemoryService`，Key 结构：`session:{sessionId}:messages`，TTL 为 12 小时。
-- 检索链路：
-  - 先执行 Query Rewrite，再按改写后的查询做混合检索。
-  - 若检索为空，直接返回拒答，不进入生成阶段。
-- Prompt 组装：
-  - 系统提示中明确：`Conversation History` 仅用于指代消解。
-  - 回答事实必须来自 `[Context]`，不能仅依据历史聊天内容。
-  - Prompt 结构固定为：`SYSTEM_PROMPT` + `[Conversation History]` + `[Context]`。
-- 生成与落库：
-  - 模型输出通过 SSE `delta` 事件流式返回。
-  - 结束时返回 `final` 事件（完整答案 + citations）。
-  - `final` 前经过 grounded 校验；失败则回退拒答文本。
-  - 助手最终回复（含回退文本）写回 Redis，供下一轮历史读取。
-
-关键实现文件：
-- `src/main/java/com/smartknowledgehub/service/ChatService.java`
-- `src/main/java/com/smartknowledgehub/service/SessionMemoryService.java`
-- `src/main/java/com/smartknowledgehub/service/RedisSessionMemoryService.java`
-- `src/main/java/com/smartknowledgehub/service/AnswerGroundingValidator.java`
-
-## 本地运行
-
-### 1. 启动依赖服务
-
-- `Redis`（会话记忆必需）。
-- `OpenSearch`（关键词检索可选）。
-- `Milvus`（向量检索可选，启用向量模式时需要）。
-
-### 2. 启动后端（默认无 Milvus 模式）
+### 1. 启动后端（默认无 Milvus）
 
 ```powershell
 mvn spring-boot:run
 ```
 
 默认行为：
-- 排除 Milvus 自动装配。
-- 关闭向量检索。
-- 仅关键词检索也可运行。
 
-### 3. 启动后端（启用 Milvus）
+- 排除 Milvus 自动装配
+- `app.vector.enabled=false`
+
+### 2. 启动后端（启用 Milvus）
 
 ```powershell
 mvn spring-boot:run -Dspring-boot.run.profiles=milvus
 ```
 
-启用前请确认 Milvus 可访问。
-
-### 4. 启动前端开发服务
+### 3. 启动前端
 
 ```powershell
 cd frontend
@@ -201,54 +153,102 @@ npm install
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-访问地址：
-- `http://127.0.0.1:5173`
+访问：`http://127.0.0.1:5173`
 
-前端默认请求后端：
-- `http://127.0.0.1:8080`
+### 4. 编译与打包
 
-可通过环境变量覆盖：
-- `VITE_API_BASE`
+仅后端编译检查：
 
-## 打包（后端 + 前端静态资源）
+```powershell
+mvn -DskipTests compiler:compile
+```
+
+完整打包（含前端构建）：
 
 ```powershell
 mvn -DskipTests package
 ```
 
-`pom.xml` 已配置前端构建并复制到 Spring 静态资源目录。
+---
 
-## 配置说明
+## 关键配置
 
-主要配置：
-- `src/main/resources/application.yaml`
-
-Milvus 配置文件：
-- `src/main/resources/application-milvus.yaml`
+主配置文件：`src/main/resources/application.yaml`  
+Milvus Profile：`src/main/resources/application-milvus.yaml`
 
 关键开关：
+
 - `app.vector.enabled`
 - `app.search.enabled`
 - `app.rewrite.enabled`
+- `app.persistence.postgres.enabled`
 
 常用环境变量：
+
 - `DEEPSEEK_API_KEY`
 - `OPENAI_API_KEY`
+- `OLLAMA_BASE_URL`
 - `REDIS_HOST`、`REDIS_PORT`
-- `OPENSEARCH_BASE_URL`、`OPENSEARCH_ENABLED`
+- `OPENSEARCH_ENABLED`、`OPENSEARCH_BASE_URL`
 - `MILVUS_HOST`、`MILVUS_PORT`
-- `POSTGRES_ENABLED`、`POSTGRES_URL`、`POSTGRES_USERNAME`、`POSTGRES_PASSWORD`、`POSTGRES_INIT_SCHEMA`
+- `POSTGRES_ENABLED`、`POSTGRES_URL`、`POSTGRES_USERNAME`、`POSTGRES_PASSWORD`
 
-## 接口列表
+注意：若 `app.search.enabled=false` 且 `app.vector.enabled=false`，系统无法召回上下文，问答会稳定返回拒答文本。
 
-- `GET /api/chat`：接口用法说明。
-- `POST /api/chat`：SSE 流式对话。
-- `POST /api/files/upload`：文件上传（multipart）。
-- `GET /api/ingestion/{jobId}`：入库任务状态。
-- `POST /api/search`：混合检索调试接口。
-- `POST /api/index`：手动索引调试接口。
+---
 
-### `POST /api/chat` 示例
+## API 说明
+
+### 1) 上传文件
+
+`POST /api/files/upload`（`multipart/form-data`）
+
+返回示例：
+
+```json
+{
+  "documentId": "3e497f40-7f12-4e70-97f8-4f9dcd1298b8",
+  "jobId": "ad0b6953-8c9b-4b04-b16f-bfba04a9de5c",
+  "status": "QUEUED"
+}
+```
+
+### 2) 入库状态
+
+`GET /api/ingestion/{jobId}`
+
+### 3) 检索调试
+
+`POST /api/search`
+
+```json
+{
+  "query": "Nacos 配置中心集群部署",
+  "topK": 5,
+  "scope": {
+    "fileName": "nacos-config.md",
+    "className": "NacosConfigService"
+  }
+}
+```
+
+### 4) 对话（SSE）
+
+`POST /api/chat`
+
+```json
+{
+  "sessionId": "demo-session",
+  "question": "Nacos 集群如何配置？",
+  "modelProvider": "AUTO",
+  "topK": 5,
+  "scope": {
+    "documentId": "3e497f40-7f12-4e70-97f8-4f9dcd1298b8"
+  }
+}
+```
+
+cURL 示例：
 
 ```bash
 curl -N -X POST "http://127.0.0.1:8080/api/chat" \
@@ -257,20 +257,106 @@ curl -N -X POST "http://127.0.0.1:8080/api/chat" \
   -d '{"sessionId":"demo","question":"Nacos 集群如何配置？","modelProvider":"AUTO","topK":5,"scope":{"fileName":"nacos-config.md"}}'
 ```
 
+SSE 事件：
+
+- `event: delta`：增量 token
+- `event: final`：完整答案 + citations
+
+`final` 示例：
+
+```json
+{
+  "type": "final",
+  "content": "...",
+  "citations": [
+    {
+      "sourceType": "chunk",
+      "sourceRef": "file=nacos-config.md | class=NacosConfigService | method=loadConfig",
+      "snippet": null
+    }
+  ],
+  "done": true
+}
+```
+
+---
+
+## PostgreSQL 持久化（可选）
+
+开启：
+
+- `app.persistence.postgres.enabled=true`
+
+自动建表（默认 `app.persistence.postgres.init-schema=true`）：
+
+- `skh_document`
+- `skh_chunk`
+- `skh_ingestion_job`
+- `skh_conversation`
+- `skh_message`
+
+用途：
+
+- 文档与切片元数据归档
+- 入库任务状态追踪
+- 会话消息长期存储
+
+---
+
 ## 常见问题
 
-- 访问 `localhost:5173` 拒绝连接：
-  - 前端开发服务未启动，请运行 `npm run dev ...` 并确认 5173 端口监听。
-- `Error creating bean 'vectorStore'`：
-  - 默认使用无 Milvus 模式；若启用 `milvus` profile，需确保 Milvus 可达。
-- 前端提示 `请求失败，请检查后端服务或网络`：
-  - 先确认后端 `127.0.0.1:8080` 正常，再检查浏览器 Network 中 `/api/chat` 的状态码。
+### 1) `Error creating bean 'vectorStore'`
+
+通常是 Milvus 不可达：
+
+- 不需要向量检索：使用默认启动方式（不带 `milvus` profile）
+- 需要向量检索：检查 Milvus 地址、端口、鉴权与网络连通性
+
+### 2) 前端 `localhost:5173` 无法访问
+
+确认前端开发服务已启动：
+
+```powershell
+cd frontend
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+### 3) 对话返回“请求失败，请检查后端服务或网络”
+
+建议按顺序排查：
+
+1. 后端是否在 `127.0.0.1:8080` 正常运行
+2. 浏览器 Network 中 `/api/chat` 的状态码
+3. Redis 是否可用
+4. 是否至少启用了一个检索后端并完成入库
+
+---
 
 ## 目录结构
 
-- `src/main/java/com/smartknowledgehub/api`：REST 接口层。
-- `src/main/java/com/smartknowledgehub/service`：入库、检索、对话核心服务。
-- `src/main/java/com/smartknowledgehub/config`：配置与运行时开关。
-- `src/main/resources`：应用配置与静态资源。
-- `frontend`：Vue 前端工程。
-- `docs/ai-assistant-design.md`：系统设计草案。
+- `src/main/java/com/smartknowledgehub/api`：REST 接口层
+- `src/main/java/com/smartknowledgehub/service`：入库/检索/对话核心
+- `src/main/java/com/smartknowledgehub/model`：请求/响应/领域模型
+- `src/main/java/com/smartknowledgehub/config`：配置与运行时开关
+- `src/main/resources`：应用配置与静态资源
+- `frontend`：Vue 前端工程
+- `docs/ai-assistant-design.md`：设计草案
+
+---
+
+## 当前状态
+
+已完成：
+
+- 多格式文档解析与切片
+- 混合检索与 RRF 融合
+- 检索作用域全链路生效
+- SSE 流式问答 + 引用溯源
+- Query Rewrite、Redis 会话、PostgreSQL 可选持久化
+
+建议下一步：
+
+1. 增加自动化测试（单元/集成/E2E）
+2. 补齐鉴权与多租户隔离
+3. 增加监控指标与链路追踪
+4. 构建检索评测集与离线评估脚本
