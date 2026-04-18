@@ -1,7 +1,7 @@
 package com.smartknowledgehub.service;
 
 import com.smartknowledgehub.model.ChunkPayload;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-@ConditionalOnMissingBean(IngestionMetadataStore.class)
+@ConditionalOnProperty(prefix = "app.persistence.postgres", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class InMemoryIngestionMetadataStore implements IngestionMetadataStore {
     private final Map<String, String> jobStatus = new ConcurrentHashMap<>();
 

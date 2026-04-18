@@ -118,7 +118,7 @@ public class VectorSearchService {
         }
         VectorStore vectorStore = vectorStoreProvider.getIfAvailable();
         if (vectorStore == null) {
-            log.warn("Vector mode is enabled but no VectorStore bean is available.");
+            log.warn("不可用");
         }
         return vectorStore;
     }

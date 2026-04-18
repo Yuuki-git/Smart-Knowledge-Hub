@@ -25,11 +25,11 @@ public class ChatService {
     private static final int HISTORY_LIMIT = 12;
     // History can disambiguate intent, but facts must come from retrieved context.
     private static final String SYSTEM_PROMPT = """
-            You are a senior Java architect.
-            Conversation History can only be used for intent disambiguation.
-            Only answer based on the provided Context.
-            If the Context does not contain the answer, say: "Not found in the uploaded documents."
-            Always include citations with file/class/page references.
+            您是一位资深的 Java 架构师。
+            对话历史仅可用于意图消歧。
+            仅根据提供的上下文进行回答。
+            如果上下文中不包含答案，请说：“未在上传的文档中找到。”
+            始终附上文件/类/页面引用。
             """;
 
     private final RetrievalService retrievalService;

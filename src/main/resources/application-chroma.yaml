@@ -3,8 +3,8 @@ spring:
     exclude: []
   ai:
     vectorstore:
-      milvus:
-        enabled: true
+      chroma:
+        initialize-schema: ${CHROMA_INIT_SCHEMA:true}
 
 app:
   vector:
