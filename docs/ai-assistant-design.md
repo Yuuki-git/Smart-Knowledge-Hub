@@ -21,7 +21,7 @@ Client (Vue3) -> API Gateway (Spring Boot)
   ├─ Chat Service (RAG + SSE streaming)
   ├─ Session Service (Redis)
   └─ Metadata DB (PostgreSQL)
-Vector DB: Milvus / Chroma
+Vector DB: Chroma
 Keyword Search: OpenSearch / Elasticsearch (BM25)
 Object Storage: MinIO / S3 (raw files)
 ```
@@ -43,7 +43,7 @@ Object Storage: MinIO / S3 (raw files)
    - Use `text-embedding-v3` (1536 dims).
 6. Persist:
    - Chunk text + metadata in PostgreSQL.
-   - Vector in Milvus/Chroma.
+   - Vector in Chroma.
    - Keyword index in OpenSearch (BM25).
 
 ## Retrieval Flow
@@ -51,7 +51,7 @@ Object Storage: MinIO / S3 (raw files)
    - LLM rewrites vague questions into precise technical queries.
 2. Hybrid search:
    - BM25 search in OpenSearch.
-   - Vector search in Milvus/Chroma (cosine similarity).
+   - Vector search in Chroma (cosine similarity).
 3. Fusion:
    - Use Reciprocal Rank Fusion (RRF) or weighted sum.
 4. Select top-k (default k=5):

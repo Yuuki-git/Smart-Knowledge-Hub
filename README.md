@@ -6,7 +6,7 @@
 ## 项目亮点
 
 - 多源入库：支持 `PDF`、`Markdown`、`Java` 文件上传与自动解析
-- 混合检索：`OpenSearch(BM25)` + `Milvus(向量)` + `RRF` 融合排序
+- 混合检索：`OpenSearch(BM25)` + `Chroma(向量)` + `RRF` 融合排序
 - 检索作用域：支持按 `documentId/fileName/className/methodName` 限定检索范围
 - 多轮对话：基于 Redis 会话记忆，SSE 流式返回
 - 回答溯源：`final` 结果携带 citations（文件/页码/类/方法）
@@ -46,7 +46,7 @@
 - 通用切片
   - `MAX_CHARS = 1200`
   - `OVERLAP_PARAGRAPHS = 1`（相邻 chunk 保留段落重叠）
-- PDF：按页提取后再聚合，保留 `page_number`
+- PDF：PDFBox按页提取后再聚合，保留 `page_number`
 - Markdown：先按标题（`#`）分 section，再段落聚合
 - Java：优先按类/方法/构造函数切片，保留 `class_name`、`method_name`
 - 兜底：JavaParser 或结构化解析失败时，自动降级为纯文本切片
@@ -71,8 +71,6 @@
 ### 3) Query Rewrite
 
 - 接口：`QueryRewriteService`
-- 开启：`app.rewrite.enabled=true`（`LlmQueryRewriteService`）
-- 关闭：`NoOpQueryRewriteService`（直接返回原问题）
 - 要求：保持原语言，只输出改写后的查询，不附加解释
 - 回退：模型不可用/异常时回退原问题
 
@@ -110,12 +108,12 @@
 ## 技术栈
 
 - 后端：`Spring Boot 3.5.x`、`Spring WebFlux`、`Spring AI`
-- 检索：`OpenSearch`、`Milvus`
+- 检索：`OpenSearch`、`Chroma`
 - 解析：`Apache Tika`、`PDFBox`、`JavaParser`
 - 缓存/会话：`Redis`
 - 持久化（可选）：`PostgreSQL`
 - 前端：`Vue 3` + `Tailwind CSS` + `Vite`
-
+- AI: Codex 5.3
 ---
 
 ## 快速开始
@@ -126,9 +124,9 @@
 - Maven `3.9+`
 - Node.js `20+`（前端开发/打包）
 - Redis（会话必需）
-- 可选：OpenSearch、Milvus、PostgreSQL
+- 可选：OpenSearch、Chroma、PostgreSQL
 
-### 1. 启动后端（默认无 Milvus）
+### 1. 启动后端（默认无 Chroma）
 
 ```powershell
 mvn spring-boot:run
@@ -136,13 +134,13 @@ mvn spring-boot:run
 
 默认行为：
 
-- 排除 Milvus 自动装配
+- 排除 Chroma 自动装配
 - `app.vector.enabled=false`
 
-### 2. 启动后端（启用 Milvus）
+### 2. 启动后端（启用 Chroma）
 
 ```powershell
-mvn spring-boot:run -Dspring-boot.run.profiles=milvus
+mvn spring-boot:run -Dspring-boot.run.profiles=chroma
 ```
 
 ### 3. 启动前端
@@ -169,168 +167,282 @@ mvn -DskipTests compiler:compile
 mvn -DskipTests package
 ```
 
----
+[//]: # (---)
 
-## 关键配置
+[//]: # ()
+[//]: # (## 关键配置)
 
-主配置文件：`src/main/resources/application.yaml`  
-Milvus Profile：`src/main/resources/application-milvus.yaml`
+[//]: # ()
+[//]: # (主配置文件：`src/main/resources/application.yaml`  )
 
-关键开关：
+[//]: # (Chroma Profile：`src/main/resources/application-chroma.yaml`)
 
-- `app.vector.enabled`
-- `app.search.enabled`
-- `app.rewrite.enabled`
-- `app.persistence.postgres.enabled`
+[//]: # ()
+[//]: # (关键开关：)
 
-常用环境变量：
+[//]: # ()
+[//]: # (- `app.vector.enabled`)
 
-- `DEEPSEEK_API_KEY`
-- `OPENAI_API_KEY`
-- `OLLAMA_BASE_URL`
-- `REDIS_HOST`、`REDIS_PORT`
-- `OPENSEARCH_ENABLED`、`OPENSEARCH_BASE_URL`
-- `MILVUS_HOST`、`MILVUS_PORT`
-- `POSTGRES_ENABLED`、`POSTGRES_URL`、`POSTGRES_USERNAME`、`POSTGRES_PASSWORD`
+[//]: # (- `app.search.enabled`)
 
-注意：若 `app.search.enabled=false` 且 `app.vector.enabled=false`，系统无法召回上下文，问答会稳定返回拒答文本。
+[//]: # (- `app.rewrite.enabled`)
 
----
+[//]: # (- `app.persistence.postgres.enabled`)
 
-## API 说明
+[//]: # ()
+[//]: # (常用环境变量：)
 
-### 1) 上传文件
+[//]: # ()
+[//]: # (- `DEEPSEEK_API_KEY`)
 
-`POST /api/files/upload`（`multipart/form-data`）
+[//]: # (- `OPENAI_API_KEY`)
 
-返回示例：
+[//]: # (- `OLLAMA_BASE_URL`)
 
-```json
-{
-  "documentId": "3e497f40-7f12-4e70-97f8-4f9dcd1298b8",
-  "jobId": "ad0b6953-8c9b-4b04-b16f-bfba04a9de5c",
-  "status": "QUEUED"
-}
-```
+[//]: # (- `REDIS_HOST`、`REDIS_PORT`)
 
-### 2) 入库状态
+[//]: # (- `OPENSEARCH_ENABLED`、`OPENSEARCH_BASE_URL`)
 
-`GET /api/ingestion/{jobId}`
+[//]: # (- `CHROMA_HOST`、`CHROMA_PORT`)
 
-### 3) 检索调试
+[//]: # (- `POSTGRES_ENABLED`、`POSTGRES_URL`、`POSTGRES_USERNAME`、`POSTGRES_PASSWORD`)
 
-`POST /api/search`
+[//]: # ()
+[//]: # (注意：若 `app.search.enabled=false` 且 `app.vector.enabled=false`，系统无法召回上下文，问答会稳定返回拒答文本。)
 
-```json
-{
-  "query": "Nacos 配置中心集群部署",
-  "topK": 5,
-  "scope": {
-    "fileName": "nacos-config.md",
-    "className": "NacosConfigService"
-  }
-}
-```
+[//]: # ()
+[//]: # (---)
 
-### 4) 对话（SSE）
+[//]: # ()
+[//]: # (## API 说明)
 
-`POST /api/chat`
+[//]: # ()
+[//]: # (### 1&#41; 上传文件)
 
-```json
-{
-  "sessionId": "demo-session",
-  "question": "Nacos 集群如何配置？",
-  "modelProvider": "AUTO",
-  "topK": 5,
-  "scope": {
-    "documentId": "3e497f40-7f12-4e70-97f8-4f9dcd1298b8"
-  }
-}
-```
+[//]: # ()
+[//]: # (`POST /api/files/upload`（`multipart/form-data`）)
 
-cURL 示例：
+[//]: # ()
+[//]: # (返回示例：)
 
-```bash
-curl -N -X POST "http://127.0.0.1:8080/api/chat" \
-  -H "Content-Type: application/json" \
-  -H "Accept: text/event-stream" \
-  -d '{"sessionId":"demo","question":"Nacos 集群如何配置？","modelProvider":"AUTO","topK":5,"scope":{"fileName":"nacos-config.md"}}'
-```
+[//]: # ()
+[//]: # (```json)
 
-SSE 事件：
+[//]: # ({)
 
-- `event: delta`：增量 token
-- `event: final`：完整答案 + citations
+[//]: # (  "documentId": "3e497f40-7f12-4e70-97f8-4f9dcd1298b8",)
 
-`final` 示例：
+[//]: # (  "jobId": "ad0b6953-8c9b-4b04-b16f-bfba04a9de5c",)
 
-```json
-{
-  "type": "final",
-  "content": "...",
-  "citations": [
-    {
-      "sourceType": "chunk",
-      "sourceRef": "file=nacos-config.md | class=NacosConfigService | method=loadConfig",
-      "snippet": null
-    }
-  ],
-  "done": true
-}
-```
+[//]: # (  "status": "QUEUED")
 
----
+[//]: # (})
 
-## PostgreSQL 持久化（可选）
+[//]: # (```)
 
-开启：
+[//]: # ()
+[//]: # (### 2&#41; 入库状态)
 
-- `app.persistence.postgres.enabled=true`
+[//]: # ()
+[//]: # (`GET /api/ingestion/{jobId}`)
 
-自动建表（默认 `app.persistence.postgres.init-schema=true`）：
+[//]: # ()
+[//]: # (### 3&#41; 检索调试)
 
-- `skh_document`
-- `skh_chunk`
-- `skh_ingestion_job`
-- `skh_conversation`
-- `skh_message`
+[//]: # ()
+[//]: # (`POST /api/search`)
 
-用途：
+[//]: # ()
+[//]: # (```json)
 
-- 文档与切片元数据归档
-- 入库任务状态追踪
-- 会话消息长期存储
+[//]: # ({)
 
----
+[//]: # (  "query": "Nacos 配置中心集群部署",)
 
-## 常见问题
+[//]: # (  "topK": 5,)
 
-### 1) `Error creating bean 'vectorStore'`
+[//]: # (  "scope": {)
 
-通常是 Milvus 不可达：
+[//]: # (    "fileName": "nacos-config.md",)
 
-- 不需要向量检索：使用默认启动方式（不带 `milvus` profile）
-- 需要向量检索：检查 Milvus 地址、端口、鉴权与网络连通性
+[//]: # (    "className": "NacosConfigService")
 
-### 2) 前端 `localhost:5173` 无法访问
+[//]: # (  })
 
-确认前端开发服务已启动：
+[//]: # (})
 
-```powershell
-cd frontend
-npm run dev -- --host 127.0.0.1 --port 5173
-```
+[//]: # (```)
 
-### 3) 对话返回“请求失败，请检查后端服务或网络”
+[//]: # ()
+[//]: # (### 4&#41; 对话（SSE）)
 
-建议按顺序排查：
+[//]: # ()
+[//]: # (`POST /api/chat`)
 
-1. 后端是否在 `127.0.0.1:8080` 正常运行
-2. 浏览器 Network 中 `/api/chat` 的状态码
-3. Redis 是否可用
-4. 是否至少启用了一个检索后端并完成入库
+[//]: # ()
+[//]: # (```json)
 
----
+[//]: # ({)
+
+[//]: # (  "sessionId": "demo-session",)
+
+[//]: # (  "question": "Nacos 集群如何配置？",)
+
+[//]: # (  "modelProvider": "AUTO",)
+
+[//]: # (  "topK": 5,)
+
+[//]: # (  "scope": {)
+
+[//]: # (    "documentId": "3e497f40-7f12-4e70-97f8-4f9dcd1298b8")
+
+[//]: # (  })
+
+[//]: # (})
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (cURL 示例：)
+
+[//]: # ()
+[//]: # (```bash)
+
+[//]: # (curl -N -X POST "http://127.0.0.1:8080/api/chat" \)
+
+[//]: # (  -H "Content-Type: application/json" \)
+
+[//]: # (  -H "Accept: text/event-stream" \)
+
+[//]: # (  -d '{"sessionId":"demo","question":"Nacos 集群如何配置？","modelProvider":"AUTO","topK":5,"scope":{"fileName":"nacos-config.md"}}')
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (SSE 事件：)
+
+[//]: # ()
+[//]: # (- `event: delta`：增量 token)
+
+[//]: # (- `event: final`：完整答案 + citations)
+
+[//]: # ()
+[//]: # (`final` 示例：)
+
+[//]: # ()
+[//]: # (```json)
+
+[//]: # ({)
+
+[//]: # (  "type": "final",)
+
+[//]: # (  "content": "...",)
+
+[//]: # (  "citations": [)
+
+[//]: # (    {)
+
+[//]: # (      "sourceType": "chunk",)
+
+[//]: # (      "sourceRef": "file=nacos-config.md | class=NacosConfigService | method=loadConfig",)
+
+[//]: # (      "snippet": null)
+
+[//]: # (    })
+
+[//]: # (  ],)
+
+[//]: # (  "done": true)
+
+[//]: # (})
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (---)
+
+[//]: # ()
+[//]: # (## PostgreSQL 持久化（可选）)
+
+[//]: # ()
+[//]: # (开启：)
+
+[//]: # ()
+[//]: # (- `app.persistence.postgres.enabled=true`)
+
+[//]: # ()
+[//]: # (自动建表（默认 `app.persistence.postgres.init-schema=true`）：)
+
+[//]: # ()
+[//]: # (- `skh_document`)
+
+[//]: # (- `skh_chunk`)
+
+[//]: # (- `skh_ingestion_job`)
+
+[//]: # (- `skh_conversation`)
+
+[//]: # (- `skh_message`)
+
+[//]: # ()
+[//]: # (用途：)
+
+[//]: # ()
+[//]: # (- 文档与切片元数据归档)
+
+[//]: # (- 入库任务状态追踪)
+
+[//]: # (- 会话消息长期存储)
+
+[//]: # ()
+[//]: # (---)
+
+[//]: # ()
+[//]: # (## 常见问题)
+
+[//]: # ()
+[//]: # (### 1&#41; `Error creating bean 'vectorStore'`)
+
+[//]: # ()
+[//]: # (通常是 Chroma 不可达：)
+
+[//]: # ()
+[//]: # (- 不需要向量检索：使用默认启动方式（不带 `chroma` profile）)
+
+[//]: # (- 需要向量检索：检查 Chroma 地址、端口、鉴权与网络连通性)
+
+[//]: # ()
+[//]: # (### 2&#41; 前端 `localhost:5173` 无法访问)
+
+[//]: # ()
+[//]: # (确认前端开发服务已启动：)
+
+[//]: # ()
+[//]: # (```powershell)
+
+[//]: # (cd frontend)
+
+[//]: # (npm run dev -- --host 127.0.0.1 --port 5173)
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (### 3&#41; 对话返回“请求失败，请检查后端服务或网络”)
+
+[//]: # ()
+[//]: # (建议按顺序排查：)
+
+[//]: # ()
+[//]: # (1. 后端是否在 `127.0.0.1:8080` 正常运行)
+
+[//]: # (2. 浏览器 Network 中 `/api/chat` 的状态码)
+
+[//]: # (3. Redis 是否可用)
+
+[//]: # (4. 是否至少启用了一个检索后端并完成入库)
+
+[//]: # ()
+[//]: # (---)
 
 ## 目录结构
 
@@ -354,9 +466,3 @@ npm run dev -- --host 127.0.0.1 --port 5173
 - SSE 流式问答 + 引用溯源
 - Query Rewrite、Redis 会话、PostgreSQL 可选持久化
 
-建议下一步：
-
-1. 增加自动化测试（单元/集成/E2E）
-2. 补齐鉴权与多租户隔离
-3. 增加监控指标与链路追踪
-4. 构建检索评测集与离线评估脚本

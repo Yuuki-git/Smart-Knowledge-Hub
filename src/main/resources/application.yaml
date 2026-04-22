@@ -3,10 +3,11 @@ spring:
     name: smart-knowledge-hub
   autoconfigure:
     exclude:
-      - org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusVectorStoreAutoConfiguration
+      - org.springframework.ai.vectorstore.chroma.autoconfigure.ChromaVectorStoreAutoConfiguration
   ai:
     model:
-      embedding: ${AI_MODEL_EMBEDDING:deepseek}
+      chat: ${AI_MODEL_CHAT:openai}
+      embedding: ${AI_MODEL_EMBEDDING:openai}
     openai:
       api-key: ${OPENAI_API_KEY:sk-3e3823d6948b40d18fe5fcaa09326818}
       chat:
@@ -16,9 +17,10 @@ spring:
         options:
           model: ${EMBEDDING_MODEL:text-embedding-3-small}
     deepseek:
-      api-key: ${DEEPSEEK_API_KEY:}
+      api-key: ${DEEPSEEK_API_KEY:sk-08a90311e3cb458dbe57a2244c4b38b5}
       base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
       chat:
+        enabled: ${DEEPSEEK_CHAT_ENABLED:true}
         options:
           model: ${DEEPSEEK_MODEL:deepseek-chat}
     ollama:
@@ -27,19 +29,15 @@ spring:
         options:
           model: ${OLLAMA_MODEL:llama3}
     vectorstore:
-      milvus:
-        enabled: false
+      chroma:
+        initialize-schema: ${CHROMA_INIT_SCHEMA:true}
+        tenant-name: ${CHROMA_TENANT:default_tenant}
+        database-name: ${CHROMA_DATABASE:default_database}
+        collection-name: ${CHROMA_COLLECTION:vector_store}
         client:
-          host: ${MILVUS_HOST:localhost}
-          port: ${MILVUS_PORT:19530}
-          username: ${MILVUS_USERNAME:}
-          password: ${MILVUS_PASSWORD:}
-        database-name: ${MILVUS_DATABASE:default}
-        collection-name: ${MILVUS_COLLECTION:vector_store}
-        embedding-dimension: ${EMBEDDING_DIMENSION:1536}
-        index-type: ${MILVUS_INDEX_TYPE:IVF_FLAT}
-        metric-type: ${MILVUS_METRIC_TYPE:COSINE}
-        initialize-schema: ${MILVUS_INIT_SCHEMA:true}
+          host: ${CHROMA_HOST:http://localhost}
+          port: ${CHROMA_PORT:8000}
+          key-token: ${CHROMA_TOKEN:}
   data:
     redis:
       host: ${REDIS_HOST:localhost}

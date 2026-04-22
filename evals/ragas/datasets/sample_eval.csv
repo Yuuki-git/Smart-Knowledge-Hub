@@ -1,0 +1,3 @@
+question,expected_answer,top_k,model_provider,scope_json
+Nacos 集群部署需要关注哪些关键配置？,"需要覆盖注册中心地址、namespace、认证、持久化和高可用参数。",5,AUTO,
+上传 Java 文件后如何提高检索准确率？,"建议优化分块粒度、保留 class/method 元数据，并结合关键词检索与向量检索。",5,AUTO,
